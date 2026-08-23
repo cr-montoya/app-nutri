@@ -36,6 +36,11 @@ Must cover:
 - Impact on multi-tenant isolation, RBAC, or clinical data if applicable (see `.agents/rules/tenant-isolation.md` and `no-plaintext-clinical-data.md`).
 - What's reused from existing code/patterns versus what's new.
 
+Before writing the document, check whether it needs a specialist perspective and, if so, open and apply that persona file, naming it in the design document:
+- Touches Prisma schema, a migration, or a new tenant-scoped table: read and apply `.agents/agents/database-architect.md`, including its RLS checklist.
+- Touches a new route, route group, or rendering-strategy choice: read and apply `.agents/agents/nextjs-architect.md`.
+- Has meaningful UI/visual surface: read and apply `.agents/agents/design.md`.
+
 Run `spec-grill` against the draft, resolve findings, and repeat until clean. Present and ask for explicit approval before moving to Phase 3.
 
 ## Phase 3: Tasks
