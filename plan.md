@@ -1,88 +1,88 @@
-# AppNutri — Plan de arquitectura (spec)
+# AppNutri — Architecture Plan (spec)
 
-> Este documento es la fuente de verdad de la arquitectura de AppNutri. Cualquier cambio de arquitectura, modelo de datos o decisión de stack se refleja primero aquí antes que en código. `CLAUDE.md` explica cómo trabajar en este repo día a día; este archivo explica **qué se está construyendo y por qué**.
+> This document is the source of truth for AppNutri's architecture. Any architecture, data model, or stack decision change is reflected here first, before code. `CLAUDE.md` explains how to work in this repo day to day; this file explains **what is being built and why**.
 
-## 1. Visión del producto
+## 1. Product vision
 
-AppNutri es una plataforma web SaaS **multi-tenant** para profesionales de nutrición (nutricionistas individuales y consultorios/clínicas con varios profesionales) que centraliza:
+AppNutri is a **multi-tenant** SaaS web platform for nutrition professionals (individual dietitians and clinics/practices with multiple professionals) that centralizes:
 
-- Gestión de pacientes y su historia clínica/antecedentes.
-- Agendamiento interno de citas (sin auto-agendamiento público en v1).
-- Captura de datos de consulta: mediciones antropométricas (pliegues, perímetros, diámetros).
-- Cálculo de composición corporal usando múltiples ecuaciones/protocolos según población, sexo y edad.
-- Planes nutricionales por paciente/consulta.
-- Visualización gráfica de la evolución del paciente en el tiempo.
-- Almacenamiento de archivos adjuntos (fotos de progreso, PDFs de laboratorio).
+- Patient management and their clinical history/background.
+- Internal appointment scheduling (no public self-booking in v1).
+- Consultation data capture: anthropometric measurements (skinfolds, circumferences, diameters).
+- Body composition calculation using multiple equations/protocols by population, sex, and age.
+- Nutritional plans per patient/consultation.
+- Graphical visualization of the patient's evolution over time.
+- Attachment storage (progress photos, lab PDFs).
 
-Requisitos no funcionales explícitos: seguridad para datos clínicos sensibles, login robusto, aislamiento estricto de datos entre organizaciones, y una UI cuidada con animación con criterio.
+Explicit non-functional requirements: security for sensitive clinical data, robust login, strict data isolation between organizations, and a polished UI with purposeful animation.
 
-## 2. Decisiones de stack
+## 2. Stack decisions
 
-| Área | Elección | Motivo |
+| Area | Choice | Reason |
 |---|---|---|
-| Framework | Next.js 15 (App Router) + TypeScript + RSC | Un solo framework full-stack, encaja con despliegue en Vercel |
-| Base de datos | Postgres en **Neon** (serverless, branching por PR) | Nativo de Vercel, buen free tier, branching de BD para previews y tests |
-| ORM | **Prisma** (elegido sobre Drizzle) | Modelo muy relacional (Org→Profesional→Paciente→Cita→Consulta→Mediciones→Resultados→Plan); `$extends` permite forzar aislamiento multi-tenant globalmente sin poder "olvidarlo"; migraciones legibles y auditables, importante en un esquema clínico sujeto a revisión |
-| Auth | **Auth.js (NextAuth) v5** — Credentials + argon2id, sesión JWT con claims de org/rol; Google OAuth opcional | Control total del modelo de roles/organización en nuestra propia base de datos (necesario para RLS); sin costo por usuario activo; permite añadir MFA después sin pelear con la UI de un proveedor externo |
-| Aislamiento multi-tenant | `organizationId` en cada tabla tenant-scoped + **Postgres Row-Level Security** como defensa en profundidad | Doble capa: una Prisma Client Extension inyecta el filtro automáticamente en cada query; RLS protege incluso ante SQL crudo, bugs de código o herramientas de administración futuras |
-| Almacenamiento de archivos | **Vercel Blob** (alternativa: Supabase Storage) con URLs firmadas | Fotos de progreso y PDFs de laboratorio, con control de acceso por organización, incluido desde el inicio (no diferido) |
-| UI | Tailwind CSS v4 + shadcn/ui (Radix) + Framer Motion | Look propio, no "template de admin genérico"; accesible; animable con criterio |
-| Gráficos | **Recharts** | Encaja con evolución temporal, radar de somatotipo, composición — sin la complejidad extra de una librería de bajo nivel como Visx |
-| Calendario de citas | **FullCalendar** | Reprogramar con drag&drop y columnas por profesional; difícil de igualar a mano con calidad comparable |
-| Formularios/validación | React Hook Form + Zod, esquemas compartidos cliente/servidor | Type-safe, mismos esquemas de validación en Server Actions |
+| Framework | Next.js 15 (App Router) + TypeScript + RSC | Single full-stack framework, fits Vercel deployment |
+| Database | Postgres on **Neon** (serverless, per-PR branching) | Vercel-native, good free tier, DB branching for previews and tests |
+| ORM | **Prisma** (chosen over Drizzle) | Highly relational model (Org→Professional→Patient→Appointment→Consultation→Measurements→Results→Plan); `$extends` lets us enforce multi-tenant isolation globally with no way to "forget it"; readable, auditable migrations, important for a clinical schema under review |
+| Auth | **Auth.js (NextAuth) v5** — Credentials + argon2id, JWT session with org/role claims; optional Google OAuth | Full control over the role/organization model in our own database (needed for RLS); no per-active-user cost; MFA can be added later without fighting a third-party provider's UI |
+| Multi-tenant isolation | `organizationId` on every tenant-scoped table + **Postgres Row-Level Security** as defense in depth | Two layers: a Prisma Client Extension injects the filter automatically on every query; RLS protects even against raw SQL, code bugs, or future admin tooling |
+| File storage | **Vercel Blob** (alternative: Supabase Storage) with signed URLs | Progress photos and lab PDFs, with per-organization access control, included from the start (not deferred) |
+| UI | Tailwind CSS v4 + shadcn/ui (Radix) + Framer Motion | Distinctive look, not a "generic admin template"; accessible; purposefully animatable |
+| Charts | **Recharts** | Fits time-series evolution, somatotype radar, composition — without the extra complexity of a low-level library like Visx |
+| Appointment calendar | **FullCalendar** | Drag-and-drop rescheduling and per-professional columns; hard to match by hand at comparable quality |
+| Forms/validation | React Hook Form + Zod, shared client/server schemas | Type-safe, same validation schemas reused in Server Actions |
 
-## 3. Modelo multi-tenant
+## 3. Multi-tenant model
 
 ```
 Organization (tenant)
-  └─ Membership (User ↔ Organization, con role: ADMIN | NUTRICIONISTA | RECEPCION)
-       └─ Professional (perfil clínico ligado 1:1 a una Membership con rol NUTRICIONISTA)
+  └─ Membership (User ↔ Organization, role: ADMIN | NUTRITIONIST | FRONT_DESK)
+       └─ Professional (clinical profile, 1:1 with a Membership of role NUTRITIONIST)
   └─ Patient
        └─ ClinicalHistory
        └─ Appointment
        └─ Consultation
             └─ AnthropometricMeasurement
-                 └─ BodyCompositionResult (uno o más, por protocolo usado)
+                 └─ BodyCompositionResult (one or more, per protocol used)
             └─ NutritionalPlan
        └─ PatientAttachment
   └─ AuditLog
 ```
 
-Un `User` puede tener membership en varias organizaciones (ej. un profesional que trabaja en dos consultorios); cada sesión opera dentro de exactamente una organización activa (claim en el JWT / selector de organización en la UI).
+A `User` can have membership in several organizations (e.g. a professional working at two clinics); each session operates within exactly one active organization (JWT claim / organization switcher in the UI).
 
-### Aislamiento de datos — dos capas
+### Data isolation — two layers
 
-1. **Prisma Client Extension** (capa principal): usa `AsyncLocalStorage` para llevar el contexto de tenant (`organizationId`, `userId`) de la request actual, e inyecta automáticamente ese `organizationId` en el `where` de toda lectura/actualización/borrado y en el `data` de toda creación, para los modelos tenant-scoped. Hace estructuralmente imposible olvidar el filtro en un Server Action nuevo.
-2. **Postgres Row-Level Security** (defensa en profundidad): cada tabla tenant-scoped tiene una policy `USING ("organizationId" = current_setting('app.current_org_id', true))`. El wrapper de tenant-context ejecuta `SET LOCAL app.current_org_id = '<id>'` al inicio de cada transacción, de modo que RLS protege incluso ante SQL crudo, un bug en la extensión de Prisma, o herramientas de administración futuras que no pasen por la capa de aplicación.
+1. **Prisma Client Extension** (primary layer): uses `AsyncLocalStorage` to carry the current request's tenant context (`organizationId`, `userId`), and automatically injects that `organizationId` into the `where` of every read/update/delete and into the `data` of every create, for tenant-scoped models. Makes it structurally impossible to forget the filter in a new Server Action.
+2. **Postgres Row-Level Security** (defense in depth): every tenant-scoped table has a policy `USING ("organizationId" = current_setting('app.current_org_id', true))`. The tenant-context wrapper runs `SET LOCAL app.current_org_id = '<id>'` at the start of every transaction, so RLS protects even against raw SQL, a bug in the Prisma extension, or future admin tooling that bypasses the application layer.
 
-## 4. Modelo de datos
+## 4. Data model
 
-Entidades principales y su propósito:
+Core entities and their purpose:
 
-- **Organization** — el tenant. Nombre, slug, fecha de creación.
-- **User** — cuenta de login (email, hash de contraseña, nombre). Independiente de organización; se relaciona vía `Membership`.
-- **Membership** — join table `User`↔`Organization` con `role` (`ADMIN` | `NUTRICIONISTA` | `RECEPCION`). Único por par (user, org).
-- **Professional** — perfil clínico (número de licencia, especialidad, firma) ligado 1:1 a una `Membership` con rol `NUTRICIONISTA`.
-- **Patient** — datos demográficos del paciente (nombre, documento, fecha de nacimiento, sexo, contacto), scoped por `organizationId`.
-- **ClinicalHistory** — antecedentes familiares, patologías personales, alergias, medicamentos, cirugías, hábitos — campos estructurados como JSON flexible (`{ condition, diagnosedAt, notes }` etc.) para no rigidizar el esquema clínico. 1:1 con `Patient`.
-- **Appointment** — cita: paciente, profesional, fecha/hora, duración, `status` (`SCHEDULED` | `CONFIRMED` | `COMPLETED` | `CANCELLED` | `NO_SHOW`), motivo, notas.
-- **Consultation** — la visita en sí; puede originarse de un `Appointment` completado (relación opcional 1:1). Contiene notas subjetivas y plan en texto libre además de las relaciones a mediciones y plan nutricional.
-- **AnthropometricMeasurement** — 1:1 con `Consultation`. Peso, talla, y campos opcionales de pliegues (tríceps, subescapular, bíceps, cresta ilíaca, supraespinal, abdominal, muslo, pantorrilla), perímetros (cintura, cadera, brazo relajado/flexionado, pantorrilla) y diámetros (húmero, fémur, muñeca).
-- **BodyCompositionResult** — resultado calculado a partir de una medición, **etiquetado con el protocolo/ecuación usada** (`protocolKey`, `protocolLabel`), con snapshot de inputs y outputs en JSON. Nunca se sobrescribe: cada cálculo (incluso re-cálculos con otro protocolo) genera un nuevo registro, para trazabilidad y comparación entre protocolos a lo largo del tiempo.
-- **NutritionalPlan** — 1:1 con `Consultation`. Calorías objetivo, macros, plan de comidas (JSON), recomendaciones, vigencia.
-- **PatientAttachment** — archivo adjunto (foto de progreso, PDF de laboratorio) almacenado en Vercel Blob, con `organizationId`, referencia al paciente y/o consulta, y metadata (tipo, fecha de subida, quién lo subió).
-- **AuditLog** — quién (userId) hizo qué (`action`) sobre qué entidad (`entityType`, `entityId`) y cuándo, con metadata e IP. Obligatorio para toda escritura sobre `ClinicalHistory`, `Consultation`, `AnthropometricMeasurement`, `NutritionalPlan`, `PatientAttachment`; para lectura, al menos en el detalle de `ClinicalHistory` y `Consultation`.
+- **Organization** — the tenant. Name, slug, creation date.
+- **User** — login account (email, password hash, name). Independent of organization; related via `Membership`.
+- **Membership** — join table `User`↔`Organization` with `role` (`ADMIN` | `NUTRITIONIST` | `FRONT_DESK`). Unique per (user, org) pair.
+- **Professional** — clinical profile (license number, specialty, signature) linked 1:1 to a `Membership` of role `NUTRITIONIST`.
+- **Patient** — patient demographics (name, ID document, birth date, sex, contact info), scoped by `organizationId`.
+- **ClinicalHistory** — family history, personal pathologies, allergies, medications, surgeries, habits — fields structured as flexible JSON (`{ condition, diagnosedAt, notes }` etc.) to avoid rigidifying the clinical schema. 1:1 with `Patient`.
+- **Appointment** — appointment: patient, professional, date/time, duration, `status` (`SCHEDULED` | `CONFIRMED` | `COMPLETED` | `CANCELLED` | `NO_SHOW`), reason, notes.
+- **Consultation** — the visit itself; may originate from a completed `Appointment` (optional 1:1 relation). Holds free-text subjective notes and plan in addition to the measurement and nutritional plan relations.
+- **AnthropometricMeasurement** — 1:1 with `Consultation`. Weight, height, and optional skinfold fields (triceps, subscapular, biceps, iliac crest, supraspinale, abdominal, thigh, calf), circumferences (waist, hip, relaxed/flexed arm, calf), and diameters (humerus, femur, wrist).
+- **BodyCompositionResult** — result calculated from a measurement, **tagged with the protocol/equation used** (`protocolKey`, `protocolLabel`), with a JSON snapshot of inputs and outputs. Never overwritten: every calculation (even a recalculation with a different protocol) creates a new record, for traceability and protocol comparison over time.
+- **NutritionalPlan** — 1:1 with `Consultation`. Target calories, macros, meal plan (JSON), recommendations, validity period.
+- **PatientAttachment** — attached file (progress photo, lab PDF) stored in Vercel Blob, with `organizationId`, a reference to the patient and/or consultation, and metadata (type, upload date, uploaded by).
+- **AuditLog** — who (userId) did what (`action`) to which entity (`entityType`, `entityId`) and when, with metadata and IP. Mandatory for every write to `ClinicalHistory`, `Consultation`, `AnthropometricMeasurement`, `NutritionalPlan`, `PatientAttachment`; for reads, at minimum on `ClinicalHistory` and `Consultation` detail views.
 
-Todas las tablas tenant-scoped llevan `organizationId` indexado.
+Every tenant-scoped table has an indexed `organizationId`.
 
-## 5. Motor de cálculo de composición corporal
+## 5. Body composition calculation engine
 
-**Patrón: Strategy + Registry.** Cada ecuación/protocolo es un módulo autocontenido que implementa una interfaz común:
+**Pattern: Strategy + Registry.** Each equation/protocol is a self-contained module implementing a common interface:
 
 ```ts
 interface BodyCompositionProtocol {
   key: string;                    // "durnin-womersley-siri"
-  label: string;                  // "Durnin-Womersley (4 pliegues) + Siri"
+  label: string;                  // "Durnin-Womersley (4 skinfolds) + Siri"
   category: 'skinfold_equation' | 'general_formula' | 'somatotype' | 'growth_chart';
   applicablePopulations: Population[];   // 'general' | 'colombia_adult' | 'athlete' | 'pediatric'
   applicableSex: Sex[] | 'both';
@@ -93,100 +93,100 @@ interface BodyCompositionProtocol {
 }
 ```
 
-Un `ProtocolRegistry` central permite filtrar, dado el contexto de un paciente (sexo, edad, población, qué mediciones tiene disponibles), qué protocolos son aplicables — la UI puede mostrar "qué se puede calcular con estos datos" o correr varios protocolos en paralelo para comparar resultados. Añadir una ecuación nueva es un cambio aditivo: un archivo nuevo en `src/calc-engine/protocols/` que se auto-registra, sin tocar el resto del sistema.
+A central `ProtocolRegistry` filters, given a patient's context (sex, age, population, which measurements are available), which protocols apply — the UI can show "what can be calculated with this data" or run several protocols in parallel to compare results. Adding a new equation is an additive change: a new self-registering file in `src/calc-engine/protocols/`, with no changes to the rest of the system.
 
-### Protocolos en v1 (validados, con evidencia sólida)
+### v1 protocols (validated, with solid evidence)
 
-- **Durnin-Womersley (4 pliegues) + ecuación de Siri** — %grasa corporal, población adulta general.
-- **Jackson-Pollock (3 sitios)** — alternativa estándar.
-- **IMC** — fórmula general, siempre aplicable con peso y talla.
-- **TMB (Mifflin-St Jeor)** — fórmula general, siempre aplicable con peso, talla y edad.
+- **Durnin-Womersley (4 skinfolds) + Siri equation** — body fat %, general adult population.
+- **Jackson-Pollock (3-site)** — standard alternative.
+- **BMI** — general formula, always applicable with weight and height.
+- **BMR (Mifflin-St Jeor)** — general formula, always applicable with weight, height, and age.
 
-### Sobre ecuaciones de población colombiana/latina
+### On Colombian/Latin American population equations
 
-Existe la ecuación **Ramírez/Torun**, estudiada en mujeres adultas colombianas (Aristizábal et al., *Colombia Médica*, 2018), pero el propio estudio de validación encontró **concordancia pobre** frente al estándar de hidrodensitometría (32.0±5.3% vs 29.6±5.8%, diferencia estadísticamente significativa). No existe consenso tipo ISAK sobre una ecuación colombiana claramente superior a Durnin-Womersley/Jackson-Pollock para adultos.
+The **Ramírez/Torun** equation exists, studied in Colombian adult women (Aristizábal et al., *Colombia Médica*, 2018), but the validation study itself found **poor agreement** against the hydrodensitometry gold standard (32.0±5.3% vs 29.6±5.8%, a statistically significant difference). There is no ISAK-level consensus on a Colombian equation clearly superior to Durnin-Womersley/Jackson-Pollock for adults.
 
-**Decisión**: incluir Ramírez/Torun como protocolo **opcional y claramente etiquetado** con la salvedad de validación en la UI, no como recomendado por defecto, y pedir el visto bueno de un profesional de nutrición antes de promoverla. La arquitectura de registro soporta esto sin fricción.
+**Decision**: include Ramírez/Torun as an **optional, clearly labeled** protocol with the validation caveat shown in the UI, not recommended by default, and requiring sign-off from a nutrition professional before promoting it. The registry architecture supports this without friction.
 
-**Pacientes pediátricos** quedan fuera del alcance de estas ecuaciones de adultos. Si se necesitan, requieren un enfoque de percentiles OMS/ICBF como categoría de protocolo separada (`growth_chart`), a definir en una fase posterior — no está en el alcance de v1.
+**Pediatric patients** are out of scope for these adult equations. If needed, they require a WHO/ICBF percentile-based approach as a separate protocol category (`growth_chart`), to be defined in a later phase — not in v1 scope.
 
-## 6. Seguridad y datos sensibles
+## 6. Security and sensitive data
 
-- Contraseñas con **argon2id** (no bcrypt), política mínima de 12 caracteres, verificación contra contraseñas filtradas (HIBP range API).
-- Sesión JWT de vida corta (~8h) con `tokenVersion` en `User` para poder invalidar todas las sesiones de una cuenta.
-- Rate limiting en rutas de autenticación (Upstash Ratelimit) contra credential stuffing.
-- RBAC con matriz de permisos por rol, **verificado siempre en el servidor** (Server Actions/Route Handlers), nunca solo ocultando UI en cliente.
-- TLS + HSTS por defecto (Vercel); backups con point-in-time recovery (Neon).
-- Cumplimiento de la **Ley 1581 de 2012 (Habeas Data)** de Colombia para datos sensibles de salud: consentimiento informado al crear un paciente, página de Política de Tratamiento de Datos, proceso de notificación de brechas. Requiere revisión legal, no solo ingeniería.
-- MFA (TOTP) para rol ADMIN y evaluación de cifrado a nivel de campo para las notas clínicas más sensibles: endurecimiento recomendado antes de manejar pacientes reales en producción, no bloqueante para el MVP.
+- Passwords with **argon2id** (not bcrypt), minimum 12-character policy, checked against breached passwords (HIBP range API).
+- Short-lived JWT session (~8h) with a `tokenVersion` field on `User` to invalidate all sessions for an account.
+- Rate limiting on authentication routes (Upstash Ratelimit) against credential stuffing.
+- RBAC with a per-role permission matrix, **always verified server-side** (Server Actions/Route Handlers), never only by hiding UI on the client.
+- TLS + HSTS by default (Vercel); backups with point-in-time recovery (Neon).
+- Compliance with Colombia's **Law 1581 of 2012 (Habeas Data)** for sensitive health data: informed consent captured when creating a patient, a Data Processing Policy page, a breach-notification process. Requires legal review, not just engineering.
+- MFA (TOTP) for the ADMIN role and an evaluation of field-level encryption for the most sensitive clinical notes: recommended hardening before handling real patients in production, not an MVP blocker.
 
-### Matriz de permisos por rol (referencia)
+### Role permission matrix (reference)
 
-| Acción | ADMIN | NUTRICIONISTA | RECEPCION |
+| Action | ADMIN | NUTRITIONIST | FRONT_DESK |
 |---|---|---|---|
-| Gestionar miembros/roles de la organización | sí | no | no |
-| CRUD de pacientes | sí | sí | sí (solo demografía) |
-| Ver historia clínica/consultas | sí | sí | no |
-| Crear/editar consultas, mediciones, planes | sí | sí | no |
-| Agendar/gestionar citas | sí | sí | sí |
-| Ver reportes/dashboards | sí | sí (propios) | limitado (ocupación) |
+| Manage organization members/roles | yes | no | no |
+| Patient CRUD | yes | yes | yes (demographics only) |
+| View clinical history/consultations | yes | yes | no |
+| Create/edit consultations, measurements, plans | yes | yes | no |
+| Schedule/manage appointments | yes | yes | yes |
+| View reports/dashboards | yes | yes (own) | limited (occupancy only) |
 
-## 7. UI/UX y animación
+## 7. UI/UX and animation
 
-Sidebar con selector de organización y navegación (Dashboard / Pacientes / Citas / Configuración). Perfil de paciente en tabs: Resumen, Antecedentes, Historial de Consultas, Planes Nutricionales. Paleta cálida/clínica vía variables CSS de shadcn (ajustable sin rehacer componentes).
+Sidebar with organization switcher and navigation (Dashboard / Patients / Appointments / Settings). Patient profile in tabs: Overview, Background, Consultation History, Nutritional Plans. Warm/clinical palette via shadcn CSS variables (adjustable without rebuilding components).
 
-Animación con criterio, no decorativa:
-- Transición sutil entre rutas (fade + slide en el contenido principal).
-- Stat cards del dashboard con aparición escalonada y conteo animado al cargar.
-- Gráficos de evolución que se "dibujan" al cargar — refuerza la narrativa de progreso que es el valor central del producto.
-- Feedback de formularios: shake en error de validación, check en guardado exitoso.
-- Estados vacíos ("aún no hay pacientes/citas") con motion suave.
+Purposeful animation, not decorative:
+- Subtle route transitions (fade + slide on main content).
+- Dashboard stat cards with staggered entrance and animated count-up on load.
+- Evolution charts that "draw themselves" on load — reinforces the progress narrative that is the product's core value.
+- Form feedback: shake on validation error, checkmark on successful save.
+- Empty states ("no patients/appointments yet") with gentle motion.
 
-Evitar: animar cada elemento de una lista en cada render, scroll-jacking, o cualquier animación que añada latencia percibida a flujos de captura de datos intensivos.
+Avoid: animating every list item on every render, scroll-jacking, or any animation that adds perceived latency to data-entry-heavy flows.
 
-## 8. Fases de entrega
+## 8. Delivery phases
 
-**Fase 0 — Scaffold, auth, esqueleto multi-tenant**
-Next.js+TS+Tailwind+shadcn; Prisma+Neon; modelos `Organization`/`User`/`Membership`/`Professional`; login/registro con creación de organización; middleware de tenant-context + Prisma extension probado con dos organizaciones (verificar cero visibilidad cruzada); RLS aplicado; deploys de preview en Vercel+Neon funcionando.
+**Phase 0 — Scaffold, auth, multi-tenant skeleton**
+Next.js+TS+Tailwind+shadcn; Prisma+Neon; `Organization`/`User`/`Membership`/`Professional` models; login/registration with organization creation; tenant-context middleware + Prisma extension tested with two organizations (verify zero cross-visibility); RLS applied; working Vercel+Neon preview deploys.
 
-**Fase 1 — Pacientes, citas y almacenamiento de archivos**
-CRUD de `Patient` (búsqueda/filtro/perfil); `Appointment` + calendario (FullCalendar) con transiciones de estado; RBAC por rol; `PatientAttachment` con Vercel Blob y URLs firmadas; audit log en creación/edición/vista de paciente.
+**Phase 1 — Patients, appointments, and file storage**
+`Patient` CRUD (search/filter/profile); `Appointment` + calendar (FullCalendar) with status transitions; per-role RBAC; `PatientAttachment` with Vercel Blob and signed URLs; audit log on patient creation/edit/view.
 
-**Fase 2 — Historia clínica + captura antropométrica + motor de cálculo**
-`ClinicalHistory` CRUD; creación de `Consultation` (opcionalmente desde una cita completada); formulario de `AnthropometricMeasurement` con validación de rangos (Zod); motor de cálculo (registry + Durnin-Womersley+Siri, Jackson-Pollock, IMC, Mifflin-St Jeor) persistiendo en `BodyCompositionResult`.
+**Phase 2 — Clinical history + anthropometric capture + calculation engine**
+`ClinicalHistory` CRUD; `Consultation` creation (optionally from a completed appointment); `AnthropometricMeasurement` form with range validation (Zod); calculation engine (registry + Durnin-Womersley+Siri, Jackson-Pollock, BMI, Mifflin-St Jeor) persisting to `BodyCompositionResult`.
 
-**Fase 3 — Planes nutricionales**
-`NutritionalPlan` ligado a una consulta (calorías/macros/plan de comidas/recomendaciones); historial de planes por paciente; exportación básica a PDF.
+**Phase 3 — Nutritional plans**
+`NutritionalPlan` tied to a consultation (calories/macros/meal plan/recommendations); per-patient plan history; basic PDF export.
 
-**Fase 4 — Gráficos y dashboards**
-Evolución del paciente (peso, IMC, %grasa, suma de pliegues, series múltiples); radar/barras de composición por consulta; dashboard a nivel de organización (citas próximas, pacientes activos, estados).
+**Phase 4 — Charts and dashboards**
+Patient evolution (weight, BMI, %fat, sum of skinfolds, multi-series); per-consultation composition radar/bar charts; org-level dashboard (upcoming appointments, active patients, statuses).
 
-**Fase 5 — Pulido, animación y endurecimiento**
-Pase de Framer Motion según §7; MFA (TOTP) para ADMIN; rate limiting de auth; evaluación de cifrado a nivel de campo; consentimiento Habeas Data + página de política de datos; revisión de rendimiento (streaming, paginación, índices).
+**Phase 5 — Polish, animation, and hardening**
+Framer Motion pass per §7; MFA (TOTP) for ADMIN; auth rate limiting; field-level encryption evaluation; Habeas Data consent + data policy page; performance review (streaming, pagination, indexes).
 
-## 9. Estrategia de testing y seguridad
+## 9. Testing and security strategy
 
-Esta sección documenta **qué herramientas se usarán y por qué**. El cableado real en CI (GitHub Actions) — el "harness" — se define en una iteración posterior; aquí se fija la estrategia para que el harness se construya sobre decisiones ya tomadas.
+This section documents **which tools will be used and why**. The actual CI wiring (GitHub Actions) — the "harness" — is defined in a later iteration; this fixes the strategy so the harness gets built on top of decisions already made.
 
-| Capa | Herramienta | Uso |
+| Layer | Tool | Use |
 |---|---|---|
-| Tests unitarios/integración | **Vitest** + React Testing Library | Lógica de negocio (motor de cálculo, validadores Zod, helpers de RBAC/tenant-context) y componentes aislados. Rápido, nativo TS/ESM, encaja con Next.js. |
-| Tests end-to-end | **Playwright** | Flujos completos: registro/login, crear organización, crear paciente, agendar cita, capturar consulta con mediciones, generar plan nutricional. Corre headless en CI contra un entorno de preview o local con base de datos de prueba (Neon branching por PR). |
-| SAST | **Semgrep** (reglas OWASP Top 10 + reglas JS/TS/React) | Análisis estático en cada PR vía GitHub Action. |
-| Lint de seguridad | **eslint-plugin-security** | Capa adicional dentro del lint normal, detecta patrones inseguros comunes en Node/JS. |
-| Secret scanning | **gitleaks** | Pre-commit y en CI, evita commitear credenciales/tokens. |
-| DAST | **OWASP ZAP Baseline Scan** | Contra el deployment de preview de Vercel en cada PR, una vez exista un entorno desplegado. |
-| SBOM | **`@cyclonedx/cyclonedx-npm`** | Genera SBOM en formato CycloneDX en cada build/release, publicado como artifact. |
-| Escaneo de dependencias | **GitHub Dependabot** (alerts + PRs automáticos) + `npm audit --audit-level=high` | Dependabot para actualizaciones continuas; `npm audit` como gate duro en CI. |
-| Checklist de referencia | **OWASP ASVS / Top 10** | Mapeado explícitamente a los controles ya presentes en la arquitectura: RLS (inyección/control de acceso), RBAC server-side (control de acceso roto), argon2id (fallas criptográficas), audit log (fallas de logging/monitoreo), rate limiting (fuerza bruta). |
+| Unit/integration tests | **Vitest** + React Testing Library | Business logic (calculation engine, Zod validators, RBAC/tenant-context helpers) and isolated components. Fast, native TS/ESM, fits Next.js. |
+| End-to-end tests | **Playwright** | Full flows: register/login, create organization, create patient, schedule appointment, capture a consultation with measurements, generate a nutritional plan. Runs headless in CI against a preview environment or local test database (Neon branching per PR). |
+| SAST | **Semgrep** (OWASP Top 10 rules + JS/TS/React rules) | Static analysis on every PR via GitHub Action. |
+| Security lint | **eslint-plugin-security** | Additional layer within normal linting, catches common insecure patterns in Node/JS. |
+| Secret scanning | **gitleaks** | Pre-commit and in CI, prevents committing credentials/tokens. |
+| DAST | **OWASP ZAP Baseline Scan** | Against the Vercel preview deployment on every PR, once a deployed environment exists. |
+| SBOM | **`@cyclonedx/cyclonedx-npm`** | Generates a CycloneDX-format SBOM on every build/release, published as an artifact. |
+| Dependency scanning | **GitHub Dependabot** (alerts + automated PRs) + `npm audit --audit-level=high` | Dependabot for continuous updates; `npm audit` as a hard gate in CI. |
+| Reference checklist | **OWASP ASVS / Top 10** | Explicitly mapped to controls already present in the architecture: RLS (injection/access control), server-side RBAC (broken access control), argon2id (cryptographic failures), audit log (logging/monitoring failures), rate limiting (brute force). |
 
-Ver `CLAUDE.md` para cómo se invoca cada una de estas herramientas una vez exista el scaffold del proyecto, y la definición de "listo" para un cambio.
+See `CLAUDE.md` for how each of these tools is invoked once the project scaffold exists, and the definition of "done" for a change.
 
-## 10. Riesgos y decisiones abiertas
+## 10. Risks and open decisions
 
-1. **Ecuación Ramírez/Torun**: pendiente visto bueno de un profesional de nutrición antes de recomendarla por defecto (ver §5).
-2. **Pacientes pediátricos**: si se necesitan, requieren un módulo de percentiles OMS/ICBF separado, no cubierto en v1.
-3. **Residencia de datos**: Neon usa por defecto regiones US/EU — confirmar si hay requisito legal de residencia en Colombia antes de escalar a producción con pacientes reales.
-4. **Revisión legal**: cumplimiento formal de la Ley 1581 de 2012 antes de procesar datos de pacientes reales — requiere a alguien con experiencia legal en protección de datos en Colombia, no solo ingeniería.
-5. **Multi-org por profesional**: el modelo soporta que un usuario pertenezca a varias organizaciones; confirmar si es un escenario real que justifique la UX de un selector de organización, o si se puede simplificar.
-6. **Telehealth/video**: fuera de alcance según los requisitos actuales — confirmar antes de fijar el modelo de `Consultation`, ya que añadiría integración de video y cambiaría el flujo.
+1. **Ramírez/Torun equation**: pending sign-off from a nutrition professional before recommending it by default (see §5).
+2. **Pediatric patients**: if needed, require a separate WHO/ICBF percentile module, not covered in v1.
+3. **Data residency**: Neon defaults to US/EU regions — confirm whether there's a legal requirement for Colombian data residency before scaling to production with real patients.
+4. **Legal review**: formal compliance with Law 1581 of 2012 before processing real patient data — requires someone with Colombian data-protection legal expertise, not just engineering.
+5. **Multi-org per professional**: the model supports a user belonging to multiple organizations; confirm whether this is a real enough scenario to justify the organization-switcher UX, or whether it can be simplified.
+6. **Telehealth/video**: out of scope per current requirements — confirm before locking down the `Consultation` model, since it would add video integration and change the flow.

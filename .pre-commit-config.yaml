@@ -1,6 +1,6 @@
-# Corre localmente sin depender de npm/package.json:
+# Runs locally with no dependency on npm/package.json:
 #   pip install pre-commit && pre-commit install
-# Mantener actualizado con: pre-commit autoupdate
+# Keep updated with: pre-commit autoupdate
 repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.24.2

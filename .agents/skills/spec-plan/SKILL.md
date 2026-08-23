@@ -1,57 +1,57 @@
 ---
 name: spec-plan
-description: Orquesta el flujo de Spec-Driven Development estilo Kiro para una feature nueva o un cambio no trivial — Requirements (EARS) → Design → Tasks, con aprobación explícita del usuario en cada fase. Úsala antes de escribir cualquier código para trabajo que no sea una corrección trivial de una línea.
+description: Orchestrates the Kiro-style Spec-Driven Development flow for a new feature or non-trivial change — Requirements (EARS) → Design → Tasks, with explicit user approval at each phase. Use it before writing any code for work that isn't a trivial one-line fix.
 ---
 
-# Spec Plan (estilo Kiro)
+# Spec Plan (Kiro-style)
 
-## Propósito
+## Purpose
 
-Convertir una idea o petición en una spec versionada en `.kiro/specs/<slug>/`, con tres documentos que se escriben y aprueban en orden estricto. Nunca se salta una fase ni se mezclan decisiones de una fase posterior en una anterior.
+Turn an idea or request into a versioned spec under `.kiro/specs/<slug>/`, made of three documents written and approved in strict order. Never skip a phase, and never mix a later phase's decisions into an earlier one.
 
-Antes de empezar, lee siempre `.kiro/steering/product.md`, `.kiro/steering/tech.md` y `.kiro/steering/structure.md`, y `plan.md` si la feature toca arquitectura no cubierta en steering.
+Before starting, always read `.kiro/steering/product.md`, `.kiro/steering/tech.md`, and `.kiro/steering/structure.md`, plus `plan.md` if the feature touches architecture not covered in steering.
 
-## Fase 1 — Requirements
+## Phase 1 — Requirements
 
-Archivo: `.kiro/specs/<slug>/requirements.md`.
+File: `.kiro/specs/<slug>/requirements.md`.
 
-1. Reformula el objetivo en un párrafo corto.
-2. Escribe una o más user stories: `Como <rol>, quiero <capacidad>, para <resultado>.`
-3. Escribe los criterios de aceptación en **formato EARS**, cada uno con un ID estable (`REQ-001`, `REQ-002`, ...):
-   - `CUANDO <evento/condición>, EL SISTEMA DEBERÁ <respuesta observable>.`
-   - Para comportamiento siempre activo: `EL SISTEMA DEBERÁ SIEMPRE <invariante>.`
-4. Marca explícitamente qué queda fuera de alcance.
-5. Si algo es ambiguo (actor, dato de entrada/salida, caso límite, criterio de éxito), pregunta — no asumas. No hay límite de preguntas, pero cada una debe cerrar una decisión concreta.
-6. Presenta el documento y pide aprobación explícita antes de pasar a Fase 2. No continúes sin un "sí" claro.
+1. Restate the objective in a short paragraph.
+2. Write one or more user stories: `As a <role>, I want <capability>, so that <outcome>.`
+3. Write acceptance criteria in **EARS format**, each with a stable ID (`REQ-001`, `REQ-002`, ...):
+   - `WHEN <event/condition>, THE SYSTEM SHALL <observable response>.`
+   - For always-on behavior: `THE SYSTEM SHALL ALWAYS <invariant>.`
+4. Explicitly mark what's out of scope.
+5. If anything is ambiguous (actor, input/output data, edge case, success criterion), ask — don't assume. There's no limit on questions, but each one must close a concrete decision.
+6. Present the document and ask for explicit approval before moving to Phase 2. Do not continue without a clear "yes."
 
-## Fase 2 — Design
+## Phase 2 — Design
 
-Archivo: `.kiro/specs/<slug>/design.md`. Solo se escribe tras aprobar Requirements.
+File: `.kiro/specs/<slug>/design.md`. Written only after Requirements is approved.
 
-Debe cubrir:
-- Qué parte de la arquitectura de `plan.md`/steering toca esta feature (modelos de datos nuevos o modificados, capas afectadas: `api`/`services`/`domain`/`repositories` equivalentes en la convención de `structure.md`).
-- Referencia explícita a cada `REQ-XXX` que este diseño satisface.
-- Diagramas mermaid solo si aclaran algo que la prosa no — no por defecto.
-- Impacto en aislamiento multi-tenant, RBAC, o datos clínicos si aplica (ver `.agents/rules/tenant-isolation.md` y `no-plaintext-clinical-data.md`).
-- Qué se reutiliza de código/patrones existentes vs qué es nuevo.
+Must cover:
+- Which part of `plan.md`/steering's architecture this feature touches (new or modified data models, affected layers — `api`/`services`/`domain`/`repositories` equivalents per `structure.md`'s convention).
+- Explicit reference to each `REQ-XXX` this design satisfies.
+- Mermaid diagrams only if they clarify something prose doesn't — not by default.
+- Impact on multi-tenant isolation, RBAC, or clinical data if applicable (see `.agents/rules/tenant-isolation.md` and `no-plaintext-clinical-data.md`).
+- What's reused from existing code/patterns vs. what's new.
 
-Presenta y pide aprobación explícita antes de pasar a Fase 3.
+Present and ask for explicit approval before moving to Phase 3.
 
-## Fase 3 — Tasks
+## Phase 3 — Tasks
 
-Archivo: `.kiro/specs/<slug>/tasks.md`. Solo se escribe tras aprobar Design.
+File: `.kiro/specs/<slug>/tasks.md`. Written only after Design is approved.
 
-- Lista de tareas con checkbox y ID estable: `- [ ] T1.1 <descripción>`.
-- Cada tarea referencia el/los `REQ-XXX` que cierra.
-- Cada tarea especifica el comando de validación exacto (ej. `npm test -- calc-engine`, `npm run test:e2e -- citas`).
-- Una tarea = una acción verificable. No fusionar varias acciones independientes en una sola tarea.
-- No descompongas más de lo necesario — el nivel de granularidad debe ser ejecutable por `task-runner` sin ambigüedad, ni tan fino que se vuelva ruido.
+- Checklist of tasks with a stable ID: `- [ ] T1.1 <description>`.
+- Each task references the `REQ-XXX` it closes.
+- Each task specifies the exact validation command (e.g. `npm test -- calc-engine`, `npm run test:e2e -- appointments`).
+- One task = one verifiable action. Don't merge several independent actions into a single task.
+- Don't decompose more than necessary — granularity should be executable by `task-runner` without ambiguity, but not so fine it becomes noise.
 
-Presenta y pide aprobación explícita antes de implementar. Una vez aprobado `tasks.md`, usa la skill `task-runner` para ejecutar cada tarea.
+Present and ask for explicit approval before implementing. Once `tasks.md` is approved, use the `task-runner` skill to execute each task.
 
-## Reglas
+## Rules
 
-- No escribas código durante esta skill — solo los tres documentos de spec.
-- No avances de fase sin aprobación explícita del usuario.
-- No introduzcas en Design o Tasks ninguna decisión de comportamiento que no esté ya en Requirements — si hace falta una decisión nueva, vuelve a Requirements primero.
-- Responde siempre en el idioma que use el usuario.
+- Don't write code during this skill — only the three spec documents.
+- Don't move to the next phase without explicit user approval.
+- Don't introduce any behavior-affecting decision in Design or Tasks that isn't already in Requirements — if a new decision is needed, go back to Requirements first.
+- Always respond in the language the user is using.

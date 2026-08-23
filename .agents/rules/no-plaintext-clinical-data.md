@@ -1,34 +1,34 @@
-# Regla: Nunca Loguear Datos Clínicos en Texto Plano
+# Rule: Never Log Clinical Data in Plaintext
 
-Activa siempre. Verifica antes de añadir cualquier `console.log`, logger de aplicación, mensaje de error, o traza.
+Always active. Check before adding any `console.log`, application logger call, error message, or trace.
 
-## Qué nunca va a un log de aplicación
+## What never goes to an application log
 
-- Nombre, documento, teléfono, email o dirección de un paciente.
-- Contenido de `ClinicalHistory` (antecedentes, alergias, patologías, medicamentos).
-- Notas de `Consultation`, mediciones de `AnthropometricMeasurement`, contenido de `NutritionalPlan`.
-- Cualquier payload completo de request/response que incluya alguno de los anteriores.
+- A patient's name, ID document, phone, email, or address.
+- `ClinicalHistory` content (background, allergies, pathologies, medications).
+- `Consultation` notes, `AnthropometricMeasurement` readings, `NutritionalPlan` content.
+- Any full request/response payload that includes any of the above.
 
-## Violación — parar inmediatamente si aparece
+## Violation — stop immediately if this appears
 
 ```ts
-// ❌ Loguea el objeto paciente completo, incluyendo PII
+// ❌ Logs the full patient object, including PII
 console.error('Failed to save patient', patient)
 
-// ❌ El mensaje de error expone datos clínicos
+// ❌ The error message exposes clinical data
 throw new Error(`Invalid skinfold value for patient ${patient.firstName}: ${value}`)
 ```
 
-## Patrón correcto
+## Correct pattern
 
 ```ts
-// ✅ Solo IDs y metadata no sensible en logs de aplicación
+// ✅ Only IDs and non-sensitive metadata in application logs
 console.error('Failed to save patient', { patientId: patient.id, organizationId })
 
-// ✅ El acceso/modificación de datos clínicos se registra en AuditLog, no en logs de app
+// ✅ Access/modification of clinical data is recorded in AuditLog, not app logs
 await logAudit({ action: 'patient.update', entityType: 'Patient', entityId: patient.id, userId, organizationId })
 ```
 
-## Por qué
+## Why
 
-Los logs de aplicación suelen terminar en herramientas de terceros (proveedores de hosting, servicios de monitoreo) con retención y controles de acceso distintos a los de la base de datos principal. Para datos de salud sujetos a la Ley 1581 de 2012, eso es una superficie de fuga que no debe existir. El trazado de "quién vio/modificó qué" tiene un lugar propio y auditable: `AuditLog` (`plan.md` §4).
+Application logs often end up in third-party tools (hosting providers, monitoring services) with retention and access controls different from the primary database's. For health data subject to Law 1581 of 2012, that's a leak surface that shouldn't exist. Tracking "who saw/modified what" has its own auditable place: `AuditLog` (`plan.md` §4).

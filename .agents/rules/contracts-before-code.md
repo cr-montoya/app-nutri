@@ -1,37 +1,37 @@
-# Regla: Contratos Antes Que Código
+# Rule: Contracts Before Code
 
-Nunca escribas código de implementación (Server Action, componente, lógica de negocio) para una entidad o feature sin definir primero su contrato.
+Never write implementation code (Server Action, component, business logic) for an entity or feature without defining its contract first.
 
-## Qué cuenta como contrato
+## What counts as a contract
 
-1. **Schema de Prisma** (`prisma/schema.prisma`) — la forma de los datos persistidos.
-2. **Esquema Zod** (`src/validation/<entidad>.ts`) — la forma validada en el borde (formularios, Server Actions).
-3. **Interfaz del protocolo** (`src/calc-engine/types.ts`) — si la tarea añade un protocolo nuevo al motor de cálculo.
+1. **Prisma schema** (`prisma/schema.prisma`) — the shape of persisted data.
+2. **Zod schema** (`src/validation/<entity>.ts`) — the shape validated at the boundary (forms, Server Actions).
+3. **Protocol interface** (`src/calc-engine/types.ts`) — if the task adds a new protocol to the calculation engine.
 
-## Orden de implementación
+## Implementation order
 
 ```
-1. Definir/actualizar el modelo en prisma/schema.prisma
-2. Correr la migración (prisma migrate dev) — el tipo generado de Prisma Client es el contrato de persistencia
-3. Definir/actualizar el esquema Zod en src/validation/
-4. Implementar la Server Action o servicio, usando los tipos de los pasos 1-3
-5. Implementar el componente/formulario, con su interfaz de props explícita
+1. Define/update the model in prisma/schema.prisma
+2. Run the migration (prisma migrate dev) — the generated Prisma Client type is the persistence contract
+3. Define/update the Zod schema in src/validation/
+4. Implement the Server Action or service, using the types from steps 1-3
+5. Implement the component/form, with its explicit props interface
 ```
 
-Nunca saltar al paso 4-5 sin haber cerrado 1-3.
+Never jump to step 4-5 without having closed 1-3.
 
-## Ejemplo del contrato más importante del dominio
+## The domain's most important contract example
 
-El motor de cálculo (`plan.md` §5) depende de que `AnthropometricMeasurement` y `BodyCompositionResult` estén bien tipados antes de escribir cualquier protocolo nuevo — un protocolo que asume un campo que no existe en el schema falla en tiempo de compilación, no en producción con un paciente real.
+The calculation engine (`plan.md` §5) depends on `AnthropometricMeasurement` and `BodyCompositionResult` being properly typed before writing any new protocol — a protocol that assumes a field that doesn't exist in the schema fails at compile time, not in production with a real patient.
 
 ```ts
-// ❌ Escribir el protocolo primero, inventando la forma de los datos
+// ❌ Writing the protocol first, inventing the shape of the data
 function calculateBodyFat(triceps: number, biceps: number) { ... }
 
-// ✅ El contrato ya define ProtocolContext (plan.md §5); el protocolo lo consume
+// ✅ The contract already defines ProtocolContext (plan.md §5); the protocol consumes it
 function calculate(ctx: ProtocolContext): ProtocolResult { ... }
 ```
 
-## En las specs
+## In specs
 
-Toda spec en `.kiro/specs/<slug>/design.md` que introduzca o modifique una entidad debe incluir su contrato (schema/Zod) explícitamente antes de pasar a `tasks.md` — esto lo verifica `spec-plan` en la Fase 2.
+Every spec in `.kiro/specs/<slug>/design.md` that introduces or modifies an entity must include its contract (schema/Zod) explicitly before moving to `tasks.md` — `spec-plan` checks this in Phase 2.

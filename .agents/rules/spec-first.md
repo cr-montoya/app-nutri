@@ -1,19 +1,19 @@
-# Regla: Spec First
+# Rule: Spec First
 
-No hay cambio de código sin una tarea aprobada en `.kiro/specs/<slug>/tasks.md`. Sin excepciones para cambios "pequeños".
+No code change without an approved task in `.kiro/specs/<slug>/tasks.md`. No exceptions for "small" changes.
 
-## Antes de cualquier implementación
+## Before any implementation
 
-1. Identifica la spec y el `slug` en `.kiro/specs/<slug>/`.
-2. Confirma que `requirements.md`, `design.md` y `tasks.md` existen y fueron aprobados explícitamente por el usuario (no basta con que existan los archivos — tienen que haber pasado por la aprobación de cada fase de `spec-plan`).
-3. Confirma que la tarea específica que vas a implementar está en `tasks.md`, sin marcar, con su comando de validación definido.
-4. Si no existe spec, o la tarea no está ahí: para y usa la skill `spec-plan` primero.
+1. Identify the spec and its `slug` under `.kiro/specs/<slug>/`.
+2. Confirm `requirements.md`, `design.md`, and `tasks.md` exist and were explicitly approved by the user (it's not enough for the files to exist — they must have gone through approval at each `spec-plan` phase).
+3. Confirm the specific task you're about to implement is in `tasks.md`, unchecked, with its validation command defined.
+4. If no spec exists, or the task isn't there: stop and use the `spec-plan` skill first.
 
-## Por qué
+## Why
 
-Sin spec no hay requirement. Sin requirement no hay criterio de aceptación. Sin criterio de aceptación, `spec-closeout` no puede verificar nada y el harness colapsa en "vibe coding" — exactamente lo que este proyecto está diseñado para evitar en un dominio con datos clínicos.
+No spec means no requirement. No requirement means no acceptance criterion. No acceptance criterion means `spec-closeout` can't verify anything, and the harness collapses into "vibe coding" — exactly what this project is designed to prevent in a domain with clinical data.
 
-## Excepciones permitidas
+## Allowed exceptions
 
-- Commits `chore:` de configuración/dependencias que son autoevidentes y no cambian comportamiento (ej. actualizar una versión de lint) pueden proceder sin spec.
-- Hotfixes de emergencia (ej. una fuga de aislamiento multi-tenant en producción) pueden implementarse de inmediato, pero deben generar una spec retroactiva en `.kiro/specs/` documentando qué pasó y por qué, antes de darse por cerrados.
+- `chore:` commits for configuration/dependencies that are self-evident and don't change behavior (e.g. bumping a lint tool version) may proceed without a spec.
+- Emergency hotfixes (e.g. a multi-tenant isolation leak in production) may be implemented immediately, but must produce a retroactive spec in `.kiro/specs/` documenting what happened and why, before being considered closed.

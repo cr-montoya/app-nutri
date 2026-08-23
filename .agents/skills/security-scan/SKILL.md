@@ -1,20 +1,20 @@
 ---
 name: security-scan
-description: Corre el bundle de seguridad local (gitleaks, semgrep, npm audit cuando exista package.json) y resume los hallazgos contra el checklist OWASP de docs/testing-and-security.md. Úsala antes de cerrar una spec que toque auth, datos de paciente, o dependencias nuevas.
+description: Runs the local security bundle (gitleaks, semgrep, npm audit once package.json exists) and summarizes findings against the OWASP checklist in docs/testing-and-security.md. Use it before closing a spec that touches auth, patient data, or new dependencies.
 ---
 
 # Security Scan
 
-## Proceso
+## Process
 
-1. Secretos: `gitleaks detect --source . --no-banner` (o `pre-commit run gitleaks --all-files` si `pre-commit` está instalado).
-2. SAST: `semgrep --config auto .` (o `pre-commit run semgrep --all-files`). Prioriza hallazgos de severidad alta/crítica y reglas OWASP Top 10.
-3. Dependencias: si existe `package.json`, `npm audit --audit-level=high`. Si no existe todavía, sáltalo y dilo explícitamente — no lo reportes como "sin hallazgos".
-4. Si el cambio toca modelos tenant-scoped, verifica manualmente contra `.agents/rules/tenant-isolation.md`: ¿toda query nueva pasa por `withTenant`? ¿hay algún `where` sin `organizationId`?
-5. Si el cambio toca logging, verifica contra `.agents/rules/no-plaintext-clinical-data.md`.
+1. Secrets: `gitleaks detect --source . --no-banner` (or `pre-commit run gitleaks --all-files` if `pre-commit` is installed).
+2. SAST: `semgrep --config auto .` (or `pre-commit run semgrep --all-files`). Prioritize high/critical severity findings and OWASP Top 10 rules.
+3. Dependencies: if `package.json` exists, `npm audit --audit-level=high`. If it doesn't exist yet, skip it and say so explicitly — don't report it as "no findings."
+4. If the change touches tenant-scoped models, manually verify against `.agents/rules/tenant-isolation.md`: does every new query go through `withTenant`? Is there any `where` missing `organizationId`?
+5. If the change touches logging, verify against `.agents/rules/no-plaintext-clinical-data.md`.
 
-## Salida
+## Output
 
-Resumen por herramienta: hallazgos altos/críticos (con archivo:línea), hallazgos medios/bajos (solo conteo), y qué chequeos se saltaron y por qué. Mapea cada hallazgo alto/crítico a la categoría OWASP correspondiente del checklist en `docs/testing-and-security.md` cuando aplique.
+A summary per tool: high/critical findings (with file:line), medium/low findings (count only), and which checks were skipped and why. Map each high/critical finding to the corresponding OWASP category in `docs/testing-and-security.md`'s checklist when applicable.
 
-No marques el scan como "limpio" si algún paso se saltó por falta de herramienta instalada — dilo explícitamente.
+Don't mark the scan as "clean" if a step was skipped because a tool wasn't installed — say so explicitly.

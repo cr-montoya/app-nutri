@@ -1,41 +1,41 @@
-# Regla: Aislamiento Multi-Tenant
+# Rule: Multi-Tenant Isolation
 
-Activa siempre. Verifica ANTES de escribir y DESPUÉS de escribir cualquier query sobre un modelo tenant-scoped.
+Always active. Check BEFORE writing and AFTER writing any query on a tenant-scoped model.
 
-## Modelos tenant-scoped
+## Tenant-scoped models
 
-`Patient`, `ClinicalHistory`, `Appointment`, `Consultation`, `AnthropometricMeasurement`, `BodyCompositionResult`, `NutritionalPlan`, `PatientAttachment`, `AuditLog` — cualquier modelo con `organizationId` en `plan.md` §4.
+`Patient`, `ClinicalHistory`, `Appointment`, `Consultation`, `AnthropometricMeasurement`, `BodyCompositionResult`, `NutritionalPlan`, `PatientAttachment`, `AuditLog` — any model with `organizationId` in `plan.md` §4.
 
-## Regla
+## Rule
 
-Toda lectura/escritura sobre estos modelos pasa por el wrapper de tenant-context (`withTenant`, Prisma Client Extension descrita en `plan.md` §3). Nunca se escribe un `where` o `data` manual que dependa de que el `organizationId` "ya viene filtrado por otro lado".
+Every read/write on these models goes through the tenant-context wrapper (`withTenant`, the Prisma Client Extension described in `plan.md` §3). Never write a manual `where` or `data` that relies on `organizationId` having "already been filtered somewhere else."
 
-## Violación — parar inmediatamente si aparece
+## Violation — stop immediately if this appears
 
 ```ts
-// ❌ Query directa sin tenant-context, confiando en que el caller ya filtró
+// ❌ Direct query with no tenant-context, trusting that the caller already filtered
 const patients = await db.patient.findMany({ where: { lastName } })
 
-// ❌ organizationId tomado de un parámetro del cliente en vez del contexto de sesión
+// ❌ organizationId taken from a client-supplied parameter instead of the session context
 const patients = await db.patient.findMany({ where: { organizationId: req.body.orgId } })
 ```
 
-## Patrón correcto
+## Correct pattern
 
 ```ts
-// ✅ Dentro de withTenant, la extensión de Prisma inyecta organizationId automáticamente
+// ✅ Inside withTenant, the Prisma extension injects organizationId automatically
 await withTenant({ organizationId: session.activeOrgId, userId: session.userId }, async () => {
   return db.patient.findMany({ where: { lastName } })
 })
 ```
 
-## Por qué
+## Why
 
-Sin esto, un bug en un Server Action nuevo puede filtrar pacientes de una organización a otra — con datos de salud, eso no es un bug cualquiera. La defensa en profundidad (RLS en Postgres, `plan.md` §3) existe precisamente para el caso en que esta regla falle; no es una excusa para relajarla.
+Without this, a bug in a new Server Action can leak patients from one organization into another — with health data, that's not just any bug. Defense in depth (Postgres RLS, `plan.md` §3) exists precisely for the case where this rule fails; it's not an excuse to relax it.
 
-## Verificación rápida
+## Quick check
 
 ```bash
-grep -n "db\.\(patient\|clinicalHistory\|appointment\|consultation\)" <archivo> 
-# cualquier resultado fuera de un callback de withTenant es sospechoso
+grep -n "db\.\(patient\|clinicalHistory\|appointment\|consultation\)" <file>
+# any result outside a withTenant callback is suspicious
 ```

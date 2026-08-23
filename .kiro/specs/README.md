@@ -1,14 +1,14 @@
-# .kiro/specs — convención
+# .kiro/specs — convention
 
-Cada feature o cambio no trivial vive aquí como una carpeta `<slug>/` con tres documentos, escritos en orden estricto y aprobados uno a uno por el usuario:
+Every feature or non-trivial change lives here as a `<slug>/` folder with three documents, written in strict order and approved one at a time by the user:
 
 ```
 .kiro/specs/<slug>/
-  requirements.md   # user stories + criterios de aceptación en formato EARS
-  design.md         # arquitectura de la feature, referenciando plan.md y .kiro/steering/
-  tasks.md          # checklist de tareas con ID estable y comando de validación por tarea
+  requirements.md   # user stories + acceptance criteria in EARS format
+  design.md         # feature architecture, referencing plan.md and .kiro/steering/
+  tasks.md          # task checklist with stable IDs and a validation command per task
 ```
 
-Se crean con la skill `spec-plan` (`.agents/skills/spec-plan/SKILL.md`). No hay código sin una tarea aprobada en `tasks.md` — ver `.agents/rules/spec-first.md`.
+Created with the `spec-plan` skill (`.agents/skills/spec-plan/SKILL.md`). No code without an approved task in `tasks.md` — see `.agents/rules/spec-first.md`.
 
-Todavía no existe ninguna spec en esta carpeta: la primera se crea cuando arranque la Fase 0 de `plan.md` (scaffold + auth + esqueleto multi-tenant).
+No spec exists in this folder yet: the first one is created when Phase 0 of `plan.md` kicks off (scaffold + auth + multi-tenant skeleton).

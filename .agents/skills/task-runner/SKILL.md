@@ -1,25 +1,25 @@
 ---
 name: task-runner
-description: Implementa una tarea puntual ya aprobada en .kiro/specs/<slug>/tasks.md. Úsala solo después de que requirements.md, design.md y tasks.md de la spec estén aprobados — nunca para trabajo sin spec.
+description: Implements a single task already approved in .kiro/specs/<slug>/tasks.md. Use it only after the spec's requirements.md, design.md, and tasks.md are approved — never for work without a spec.
 ---
 
 # Task Runner
 
-## Precondición
+## Precondition
 
-La tarea a implementar debe existir como checkbox sin marcar en un `tasks.md` ya aprobado. Si no hay spec, o la tarea no está en `tasks.md`, para y usa `spec-plan` primero (ver `.agents/rules/spec-first.md`).
+The task to implement must exist as an unchecked checkbox in an already-approved `tasks.md`. If there's no spec, or the task isn't in `tasks.md`, stop and use `spec-plan` first (see `.agents/rules/spec-first.md`).
 
-## Proceso
+## Process
 
-1. Lee la tarea (`T<fase>.<índice>`), los `REQ-XXX` que referencia en `requirements.md`, y la sección relevante de `design.md`.
-2. Antes de escribir código: confirma que existen los contratos necesarios (schema Prisma, tipos Zod) para esta tarea — si no existen y esta tarea no es la que los crea, sigue `.agents/rules/contracts-before-code.md`.
-3. Implementa el cambio mínimo que satisface la tarea. No adelantes trabajo de otras tareas de la misma spec.
-4. Aplica siempre `.agents/rules/tenant-isolation.md` y `.agents/rules/no-plaintext-clinical-data.md` si el cambio toca datos de paciente/consulta.
-5. Corre el comando de validación exacto especificado en la tarea. Si falla, corrige y vuelve a correr — no marques la tarea como hecha con una validación en rojo.
-6. Marca el checkbox `[x]` en `tasks.md` solo cuando la validación pasa. Si la tarea no se puede completar, márcala `[BLOCKED]` con una razón concreta y repórtalo al usuario en vez de improvisar una solución fuera del diseño aprobado.
+1. Read the task (`T<phase>.<index>`), the `REQ-XXX` it references in `requirements.md`, and the relevant section of `design.md`.
+2. Before writing code: confirm the necessary contracts (Prisma schema, Zod types) exist for this task — if they don't and this task isn't the one creating them, follow `.agents/rules/contracts-before-code.md`.
+3. Implement the minimal change that satisfies the task. Don't get ahead of other tasks in the same spec.
+4. Always apply `.agents/rules/tenant-isolation.md` and `.agents/rules/no-plaintext-clinical-data.md` if the change touches patient/consultation data.
+5. Run the exact validation command specified in the task. If it fails, fix and rerun — never mark a task done with a red validation.
+6. Check the box `[x]` in `tasks.md` only once validation passes. If the task can't be completed, mark it `[BLOCKED]` with a concrete reason and report it to the user instead of improvising a solution outside the approved design.
 
-## Reglas
+## Rules
 
-- Una tarea, un alcance. No mezcles varias tareas de `tasks.md` en el mismo cambio salvo que el usuario lo pida explícitamente.
-- No introduzcas decisiones de comportamiento nuevas que no estén en `design.md` — si hace falta una, vuelve a `spec-plan`.
-- Sigue las convenciones de commit de `AGENTS.md`/`.agents/commands/commit.md` para el commit de esta tarea.
+- One task, one scope. Don't mix several `tasks.md` tasks into the same change unless the user explicitly asks for it.
+- Don't introduce new behavior-affecting decisions that aren't in `design.md` — if one is needed, go back to `spec-plan`.
+- Follow the commit conventions in `AGENTS.md`/`.agents/commands/commit.md` for this task's commit.

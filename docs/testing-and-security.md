@@ -1,68 +1,70 @@
-# Testing y seguridad — guía accionable
+# Testing and security — actionable guide
 
-Versión operativa de `plan.md` §9. Úsala para decidir qué comando correr y qué gates aplican a un cambio dado.
+Operational version of `plan.md` §9. Use it to decide which command to run and which gates apply to a given change.
 
-## Comandos
+## Commands
 
-Ya activos, sin depender de `package.json`:
+Already active, with no dependency on `package.json`:
 
-| Comando | Qué hace |
+| Command | What it does |
 |---|---|
-| `pre-commit run --all-files` | gitleaks + semgrep sobre todo el repo (ver `.pre-commit-config.yaml`) |
-| `pre-commit run gitleaks --all-files` | Solo secret scanning |
-| `pre-commit run semgrep --all-files` | Solo SAST |
+| `pre-commit run --all-files` | gitleaks + semgrep over the whole repo (see `.pre-commit-config.yaml`) |
+| `pre-commit run gitleaks --all-files` | Secret scanning only |
+| `pre-commit run semgrep --all-files` | SAST only |
 
-Activos desde la Fase 0 (cuando exista `package.json`/scaffold de Next.js):
+Active from Phase 0 (once `package.json`/the Next.js scaffold exists):
 
-| Comando | Qué hace |
+| Command | What it does |
 |---|---|
 | `npm test` | Vitest + React Testing Library |
 | `npm run test:e2e` | Playwright |
 | `npm run lint` | ESLint + `eslint-plugin-security` |
-| `npm run scan:sast` | Semgrep (reglas OWASP Top 10 + JS/TS/React) |
+| `npm run scan:sast` | Semgrep (OWASP Top 10 + JS/TS/React rules) |
 | `npm run scan:secrets` | gitleaks |
 | `npm run scan:deps` | `npm audit --audit-level=high` |
-| `npm run sbom` | SBOM en CycloneDX vía `@cyclonedx/cyclonedx-npm` |
+| `npm run sbom` | SBOM in CycloneDX via `@cyclonedx/cyclonedx-npm` |
 
-DAST (OWASP ZAP Baseline Scan) corre en CI contra el deployment de preview de Vercel, nunca localmente — requiere un entorno desplegado. Se activa junto con `ci.yml` en la Fase 0.
+DAST (OWASP ZAP Baseline Scan) runs in CI against the Vercel preview deployment, never locally — it requires a deployed environment. Activates alongside `ci.yml` in Phase 0.
 
 ## Gate matrix
 
-| Tipo de cambio | Gates requeridos |
+| Change type | Required gates |
 |---|---|
+| Prisma schema change / new tenant-scoped table / migration | Database Architect, Security, Reviewer |
 | Multi-tenant / auth / RLS / roles | Security, Reviewer, QA |
-| Historia clínica / mediciones / archivos adjuntos | Security, QA, Reviewer |
-| Nuevo protocolo en `calc-engine` | Reviewer, QA (test unitario obligatorio contra un cálculo de referencia) |
-| UI / animación / nueva pantalla | Design, QA, Code Quality |
-| Componente/primitivo de diseño nuevo | Design, Code Quality, Reviewer |
-| CI/CD / infra / dependencias | Security, Reviewer |
-| Solo documentación / specs | Reviewer opcional |
+| Clinical history / measurements / attachments | Security, QA, Reviewer |
+| New `calc-engine` protocol | Reviewer, QA (unit test against a reference calculation required) |
+| New route / rendering-strategy change | Next.js Architect (consult), QA |
+| UI / animation / new screen | Design, QA, Code Quality |
+| New design component/primitive | Design, Code Quality, Reviewer |
+| CI/CD / infra / dependencies | Security, Reviewer |
+| Docs / specs only | Reviewer optional |
 | Bug fix | QA, Code Quality, Reviewer |
 
-## Definition of Ready (una spec en `.kiro/specs/<slug>/`)
+## Definition of Ready (a spec under `.kiro/specs/<slug>/`)
 
-- `requirements.md` tiene objetivo, alcance/fuera de alcance, y criterios EARS verificables — aprobado explícitamente.
-- `design.md` referencia cada `REQ-XXX` y define los contratos (schema Prisma, Zod) si la feature introduce o modifica una entidad — aprobado explícitamente.
-- `tasks.md` tiene tareas con ID estable, referencia a requirements, y comando de validación exacto — aprobado explícitamente.
+- `requirements.md` has an objective, scope/out-of-scope, and verifiable EARS criteria — explicitly approved.
+- `design.md` references every `REQ-XXX` and defines the contracts (Prisma schema, Zod) if the feature introduces or modifies an entity — explicitly approved.
+- `tasks.md` has tasks with stable IDs, a reference to requirements, and an exact validation command — explicitly approved.
 
 ## Definition of Done
 
-- Todas las tareas de `tasks.md` están `[x]` o `[BLOCKED]` con razón documentada.
-- Cada `REQ-XXX` tiene al menos una validación en verde (`spec-closeout` lo confirma).
-- Gates de la tabla de arriba corridos según el tipo de cambio, sin hallazgos altos/críticos sin resolver.
-- Sin secretos detectados por gitleaks.
-- Si hubo desviación entre `design.md` y la implementación real, está documentada explícitamente.
+- Every task in `tasks.md` is `[x]` or `[BLOCKED]` with a documented reason.
+- Every `REQ-XXX` has at least one green validation (`spec-closeout` confirms this).
+- Gates from the table above run per the change type, with no unresolved high/critical findings.
+- No secrets detected by gitleaks.
+- Any deviation between `design.md` and the actual implementation is explicitly documented.
 
-## Checklist OWASP (referencia, mapeado a controles ya presentes en la arquitectura)
+## OWASP checklist (reference, mapped to controls already present in the architecture)
 
-| OWASP Top 10 | Control en AppNutri |
+| OWASP Top 10 | Control in AppNutri |
 |---|---|
-| A01 Broken Access Control | RBAC server-side (`src/lib/rbac.ts`) + RLS en Postgres |
-| A02 Cryptographic Failures | argon2id para contraseñas, TLS/HSTS, evaluación de cifrado a nivel de campo para notas clínicas (Fase 5) |
-| A03 Injection | Prisma (queries parametrizadas), Zod en el borde |
-| A04 Insecure Design | SDD con gates de Security/Reviewer antes de cerrar cualquier spec sensible |
-| A05 Security Misconfiguration | Secrets solo en variables de entorno de Vercel, nunca en el bundle de cliente |
-| A07 Auth Failures | argon2id, rate limiting en rutas de auth, `tokenVersion` para invalidar sesiones |
-| A08 Data Integrity Failures | `BodyCompositionResult` nunca se sobrescribe (trazabilidad de protocolo usado) |
-| A09 Logging/Monitoring Failures | `AuditLog` para todo acceso/mutación clínica; nunca PII en logs de aplicación |
-| A10 SSRF | N/A hasta que existan integraciones salientes; revisar si se añade una |
+| A01 Broken Access Control | Server-side RBAC (`src/lib/rbac.ts`) + Postgres RLS |
+| A02 Cryptographic Failures | argon2id for passwords, TLS/HSTS, field-level encryption evaluation for clinical notes (Phase 5) |
+| A03 Injection | Prisma (parameterized queries), Zod at the boundary |
+| A04 Insecure Design | SDD with Security/Reviewer gates before closing any sensitive spec |
+| A05 Security Misconfiguration | Secrets only in Vercel environment variables, never in the client bundle |
+| A07 Auth Failures | argon2id, rate limiting on auth routes, `tokenVersion` to invalidate sessions |
+| A08 Data Integrity Failures | `BodyCompositionResult` is never overwritten (traceability of the protocol used) |
+| A09 Logging/Monitoring Failures | `AuditLog` for every clinical access/mutation; never PII in application logs |
+| A10 SSRF | N/A until outbound integrations exist; revisit if one is added |

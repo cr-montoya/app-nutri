@@ -1,28 +1,28 @@
 ---
 name: commit
-description: Crea un commit convencional para los cambios en el árbol de trabajo de AppNutri.
+description: Creates a conventional commit for the changes in AppNutri's working tree.
 ---
 
 # Commit
 
-## Proceso
+## Process
 
-1. Corre `git status` y `git diff` (y `git diff --staged` si aplica) para ver qué cambió.
-2. Excluye del staging cualquier archivo que no deba commitearse: `.env*`, artefactos de build, estado local de sesión (`.claude/settings.local.json`, `.claude/*.lock`).
-3. Si algún archivo staged parece contener un secreto o credencial, revisa su contenido antes de continuar — no lo commitees sin confirmar.
-4. Escribe el mensaje siguiendo la convención de `AGENTS.md`:
+1. Run `git status` and `git diff` (and `git diff --staged` if applicable) to see what changed.
+2. Exclude from staging anything that shouldn't be committed: `.env*`, build artifacts, local session state (`.claude/settings.local.json`, `.claude/*.lock`).
+3. If any staged file looks like it contains a secret or credential, inspect its content before continuing — don't commit it without confirming.
+4. Write the message following the convention in `AGENTS.md`:
 
 ```
 <type>(<scope>): <description>
 ```
 
-- Tipos: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `style`, `perf`.
-- Scope: área afectada (ej. `calc-engine`, `patients`, `harness`, `ci`). Omite solo si es verdaderamente transversal.
-- En inglés, imperativo, presente, una sola línea, sin cuerpo ni footer, sin `Co-Authored-By`.
+- Types: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `style`, `perf`.
+- Scope: affected area (e.g. `calc-engine`, `patients`, `harness`, `ci`). Omit only if truly cross-cutting.
+- English, imperative, present tense, single line, no body or footer, no `Co-Authored-By`.
 
-5. Crea el commit. No hagas push ni abras PR salvo que el usuario lo pida explícitamente — este repo todavía puede no tener remoto configurado.
+5. Create the commit. Don't push or open a PR unless the user explicitly asks — this repo may still not have a remote configured.
 
-## Ejemplos
+## Examples
 
 ```
 feat(calc-engine): add durnin-womersley and siri protocol
