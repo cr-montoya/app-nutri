@@ -1,4 +1,4 @@
-# Runs locally with no dependency on npm/package.json:
+# Runs locally with no dependency on pnpm/package.json:
 #   pip install pre-commit && pre-commit install
 # Keep updated with: pre-commit autoupdate
 repos:

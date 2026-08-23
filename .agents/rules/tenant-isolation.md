@@ -4,26 +4,26 @@ Always active. Check BEFORE writing and AFTER writing any query on a tenant-scop
 
 ## Tenant-scoped models
 
-`Patient`, `ClinicalHistory`, `Appointment`, `Consultation`, `AnthropometricMeasurement`, `BodyCompositionResult`, `NutritionalPlan`, `PatientAttachment`, `AuditLog` — any model with `organizationId` in `plan.md` §4.
+`Patient`, `ClinicalHistory`, `Appointment`, `Consultation`, `AnthropometricMeasurement`, `BodyCompositionResult`, `NutritionalPlan`, `PatientAttachment`, `AuditLog`. Any model with `organizationId` in `plan.md` §4.
 
 ## Rule
 
-Every read/write on these models goes through the tenant-context wrapper (`withTenant`, the Prisma Client Extension described in `plan.md` §3). Never write a manual `where` or `data` that relies on `organizationId` having "already been filtered somewhere else."
+Every read or write on these models goes through the tenant-context wrapper (`withTenant`, the Prisma Client Extension described in `plan.md` §3). Never write a manual `where` or `data` that relies on `organizationId` having "already been filtered somewhere else."
 
-## Violation — stop immediately if this appears
+## Violation: stop immediately if this appears
 
 ```ts
-// ❌ Direct query with no tenant-context, trusting that the caller already filtered
+// Bad: direct query with no tenant-context, trusting that the caller already filtered
 const patients = await db.patient.findMany({ where: { lastName } })
 
-// ❌ organizationId taken from a client-supplied parameter instead of the session context
+// Bad: organizationId taken from a client-supplied parameter instead of the session context
 const patients = await db.patient.findMany({ where: { organizationId: req.body.orgId } })
 ```
 
 ## Correct pattern
 
 ```ts
-// ✅ Inside withTenant, the Prisma extension injects organizationId automatically
+// Good: inside withTenant, the Prisma extension injects organizationId automatically
 await withTenant({ organizationId: session.activeOrgId, userId: session.userId }, async () => {
   return db.patient.findMany({ where: { lastName } })
 })
@@ -31,7 +31,7 @@ await withTenant({ organizationId: session.activeOrgId, userId: session.userId }
 
 ## Why
 
-Without this, a bug in a new Server Action can leak patients from one organization into another — with health data, that's not just any bug. Defense in depth (Postgres RLS, `plan.md` §3) exists precisely for the case where this rule fails; it's not an excuse to relax it.
+Without this, a bug in a new Server Action can leak patients from one organization into another. With health data, that's not just any bug. Defense in depth (Postgres RLS, `plan.md` §3) exists precisely for the case where this rule fails; it's not an excuse to relax it.
 
 ## Quick check
 

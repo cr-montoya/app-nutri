@@ -1,6 +1,6 @@
 # Steering: Structure and conventions
 
-Persistent context — always read before deciding where a new file goes.
+Persistent context. Always read before deciding where a new file goes.
 
 ## Target folder structure
 
@@ -39,8 +39,8 @@ Organization (tenant)
 ```
 
 Isolation:
-1. **Prisma Client Extension** (`src/lib/db.ts`) — injects `organizationId` automatically via `AsyncLocalStorage`, primary layer.
-2. **Postgres RLS** — a policy per tenant-scoped table, defense in depth.
+1. **Prisma Client Extension** (`src/lib/db.ts`): injects `organizationId` automatically via `AsyncLocalStorage`, primary layer.
+2. **Postgres RLS**: a policy per tenant-scoped table, defense in depth.
 
 Full data model: `plan.md` §4.
 

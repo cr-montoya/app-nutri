@@ -7,7 +7,7 @@ build/
 .env.*
 !.env.example
 
-# Claude Code — local session state, not versioned
+# Claude Code: local session state, not versioned
 .claude/settings.local.json
 .claude/*.lock
 

@@ -9,7 +9,7 @@ Always active. Check before adding any `console.log`, application logger call, e
 - `Consultation` notes, `AnthropometricMeasurement` readings, `NutritionalPlan` content.
 - Any full request/response payload that includes any of the above.
 
-## Violation — stop immediately if this appears
+## Violation: stop immediately if this appears
 
 ```ts
 // ❌ Logs the full patient object, including PII

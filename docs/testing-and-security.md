@@ -1,4 +1,4 @@
-# Testing and security — actionable guide
+# Testing and security: actionable guide
 
 Operational version of `plan.md` §9. Use it to decide which command to run and which gates apply to a given change.
 
@@ -12,19 +12,19 @@ Already active, with no dependency on `package.json`:
 | `pre-commit run gitleaks --all-files` | Secret scanning only |
 | `pre-commit run semgrep --all-files` | SAST only |
 
-Active from Phase 0 (once `package.json`/the Next.js scaffold exists):
+Active from Phase 0 (once `package.json`/the Next.js scaffold exists). All commands use `pnpm`; see `.agents/rules/pnpm-only.md`.
 
 | Command | What it does |
 |---|---|
-| `npm test` | Vitest + React Testing Library |
-| `npm run test:e2e` | Playwright |
-| `npm run lint` | ESLint + `eslint-plugin-security` |
-| `npm run scan:sast` | Semgrep (OWASP Top 10 + JS/TS/React rules) |
-| `npm run scan:secrets` | gitleaks |
-| `npm run scan:deps` | `npm audit --audit-level=high` |
-| `npm run sbom` | SBOM in CycloneDX via `@cyclonedx/cyclonedx-npm` |
+| `pnpm test` | Vitest + React Testing Library |
+| `pnpm test:e2e` | Playwright |
+| `pnpm lint` | ESLint + `eslint-plugin-security` |
+| `pnpm scan:sast` | Semgrep (OWASP Top 10 + JS/TS/React rules) |
+| `pnpm scan:secrets` | gitleaks |
+| `pnpm scan:deps` | `pnpm audit --audit-level=high` |
+| `pnpm sbom` | SBOM in CycloneDX via `pnpm dlx @cyclonedx/cyclonedx-npm` |
 
-DAST (OWASP ZAP Baseline Scan) runs in CI against the Vercel preview deployment, never locally — it requires a deployed environment. Activates alongside `ci.yml` in Phase 0.
+DAST (OWASP ZAP Baseline Scan) runs in CI against the Vercel preview deployment, never locally; it requires a deployed environment. Activates alongside `ci.yml` in Phase 0.
 
 ## Gate matrix
 
@@ -43,17 +43,18 @@ DAST (OWASP ZAP Baseline Scan) runs in CI against the Vercel preview deployment,
 
 ## Definition of Ready (a spec under `.kiro/specs/<slug>/`)
 
-- `requirements.md` has an objective, scope/out-of-scope, and verifiable EARS criteria — explicitly approved.
-- `design.md` references every `REQ-XXX` and defines the contracts (Prisma schema, Zod) if the feature introduces or modifies an entity — explicitly approved.
-- `tasks.md` has tasks with stable IDs, a reference to requirements, and an exact validation command — explicitly approved.
+- `requirements.md` has an objective, scope/out-of-scope, and verifiable EARS criteria, explicitly approved, with a clean `spec-grill` pass.
+- `design.md` references every `REQ-XXX` and defines the contracts (Prisma schema, Zod) if the feature introduces or modifies an entity, explicitly approved, with a clean `spec-grill` pass.
+- `tasks.md` has tasks with stable IDs, a reference to requirements, and an exact validation command, explicitly approved.
 
 ## Definition of Done
 
-- Every task in `tasks.md` is `[x]` or `[BLOCKED]` with a documented reason.
+- Every task in `tasks.md` is `[x]` or `[BLOCKED]` with a documented reason, per `.agents/rules/human-escalation.md`.
 - Every `REQ-XXX` has at least one green validation (`spec-closeout` confirms this).
 - Gates from the table above run per the change type, with no unresolved high/critical findings.
 - No secrets detected by gitleaks.
 - Any deviation between `design.md` and the actual implementation is explicitly documented.
+- No agent that produced a change also approved it; see `.agents/rules/agent-anti-patterns.md`.
 
 ## OWASP checklist (reference, mapped to controls already present in the architecture)
 
