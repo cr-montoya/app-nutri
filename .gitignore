@@ -1,0 +1,17 @@
+# Node / Next.js (activo desde la Fase 0)
+node_modules/
+.next/
+dist/
+build/
+.env
+.env.*
+!.env.example
+
+# Claude Code — estado local de sesión, no versionado
+.claude/settings.local.json
+.claude/*.lock
+
+# Editores / SO
+.DS_Store
+.vscode/
+.idea/

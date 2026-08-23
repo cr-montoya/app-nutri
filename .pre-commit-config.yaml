@@ -1,0 +1,14 @@
+# Corre localmente sin depender de npm/package.json:
+#   pip install pre-commit && pre-commit install
+# Mantener actualizado con: pre-commit autoupdate
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/semgrep/pre-commit
+    rev: v1.173.0
+    hooks:
+      - id: semgrep
+        args: ["--config", "auto", "--error"]
