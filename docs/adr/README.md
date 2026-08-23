@@ -14,6 +14,8 @@ Use the `adr` skill (`.agents/skills/adr/SKILL.md`). It numbers the record seque
 
 | ADR | Title | Status |
 |---|---|---|
+| [0001](0001-argon2-hashing-library.md) | Password hashing library (@node-rs/argon2) | Accepted |
+| [0002](0002-token-scoped-rls-lookup.md) | Token-scoped RLS branch for pre-authentication lookups | Accepted |
 <!-- adr skill appends rows here, oldest first -->
 
 ## Format
