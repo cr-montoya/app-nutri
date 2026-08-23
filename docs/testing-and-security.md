@@ -54,6 +54,7 @@ DAST (OWASP ZAP Baseline Scan) runs in CI against the Vercel preview deployment,
 - Gates from the table above run per the change type, with no unresolved high/critical findings.
 - No secrets detected by gitleaks.
 - Any deviation between `design.md` and the actual implementation is explicitly documented.
+- Every decision that triggers `.agents/rules/adr-required.md` has a corresponding record in `docs/adr/`.
 - No agent that produced a change also approved it; see `.agents/rules/agent-anti-patterns.md`.
 
 ## OWASP checklist (reference, mapped to controls already present in the architecture)

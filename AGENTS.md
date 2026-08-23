@@ -2,7 +2,7 @@
 
 Canonical, tool-agnostic instructions for any AI agent (Claude Code, OpenCode, Codex CLI, or other) working in this repository. Read this before touching any file.
 
-`plan.md` is the source of truth for the full architecture; this file is the operational summary. `.kiro/steering/` goes deeper on product, stack, and structure. `.kiro/specs/` is where every feature in development lives.
+`plan.md` is the source of truth for the full architecture; this file is the operational summary. `.kiro/steering/` goes deeper on product, stack, and structure. `.kiro/specs/` is where every feature in development lives. `docs/adr/` is the permanent record of why significant architecture decisions were made.
 
 ## What AppNutri is
 
@@ -37,7 +37,9 @@ Each phase requires explicit approval before moving to the next, and a clean adv
 
 Hard rule: no code change without an approved task in `tasks.md` referencing a requirement. See `.agents/rules/spec-first.md`.
 
-**When describing or starting this flow, name the exact files you are using.** If asked how you would approach a task, answer with the actual skill and persona file names below, not a paraphrase in your own words. A description of "I'd write requirements, then design, then tasks, with a critical review in between" without naming `spec-plan`, `spec-grill`, `task-runner`, `commit`, `spec-closeout`, `pr-prep`, and the relevant persona files means those files were not actually read.
+When a design decision has more than one genuinely defensible approach, run the `decision-debate` skill before settling it, and record the outcome as an ADR in `docs/adr/` with the `adr` skill; see `.agents/rules/adr-required.md`.
+
+**When describing or starting this flow, name the exact files you are using.** If asked how you would approach a task, answer with the actual skill and persona file names below, not a paraphrase in your own words. A description of "I'd write requirements, then design, then tasks, with a critical review in between" without naming `spec-plan`, `spec-grill`, `decision-debate`, `adr`, `task-runner`, `commit`, `spec-closeout`, `pr-prep`, and the relevant persona files means those files were not actually read.
 
 ## Agent catalog
 
@@ -71,6 +73,7 @@ Claude Code and OpenCode can invoke these as actual subagents. Codex CLI cannot;
 - `.agents/rules/agent-anti-patterns.md`: separation of duties, no self-review, no rubber-stamping, and other multi-agent failure modes to avoid.
 - `.agents/rules/cost-optimization.md`: concise output, catch problems in the spec instead of after implementation, don't spawn what you can answer directly.
 - `.agents/rules/human-escalation.md`: after 3 failed fix attempts on the same validation, stop and ask the user instead of trying a 4th variation.
+- `.agents/rules/adr-required.md`: which decisions must get a permanent record in `docs/adr/`, and which don't.
 
 ## Commit convention
 

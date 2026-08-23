@@ -41,6 +41,8 @@ Before writing the document, check whether it needs a specialist perspective and
 - Touches a new route, route group, or rendering-strategy choice: read and apply `.agents/agents/nextjs-architect.md`.
 - Has meaningful UI/visual surface: read and apply `.agents/agents/design.md`.
 
+If the design has a genuine fork between two or more defensible approaches, run the `decision-debate` skill before writing that part of the document down as settled; don't silently pick one and present it as if it were the only option. Once a debate concludes, record it with the `adr` skill per `.agents/rules/adr-required.md` before asking for approval on this phase.
+
 Run `spec-grill` against the draft, resolve findings, and repeat until clean. Present and ask for explicit approval before moving to Phase 3.
 
 ## Phase 3: Tasks
