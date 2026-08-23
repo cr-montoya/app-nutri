@@ -18,10 +18,11 @@ The task to implement must exist as an unchecked checkbox in an already-approved
 5. Run the exact validation command specified in the task. If it fails, fix and rerun; never mark a task done with a red validation.
 6. If the same validation still fails after 3 distinct fix attempts, stop and follow `.agents/rules/human-escalation.md` instead of trying a 4th variation.
 7. Check the box `[x]` in `tasks.md` only once validation passes. If the task can't be completed, mark it `[BLOCKED]` with a concrete reason and report it to the user instead of improvising a solution outside the approved design.
+8. Use the `commit` skill to commit this task's change on its own, don't bundle it with the next task's change.
 
 ## Rules
 
 - One task, one scope. Don't mix several `tasks.md` tasks into the same change unless the user explicitly asks for it.
 - Don't introduce new behavior-affecting decisions that aren't in `design.md`. If one is needed, go back to `spec-plan`.
 - You implemented this task; you don't get to also mark it reviewed. See `.agents/rules/agent-anti-patterns.md` on separation of duties.
-- Follow the commit conventions in `AGENTS.md` and `.agents/commands/commit.md` for this task's commit.
+- Once every task in `tasks.md` is done, hand off to `spec-closeout` and then `pr-prep`; `task-runner`'s job ends at the last task, not at opening the PR.

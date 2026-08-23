@@ -20,7 +20,7 @@ description: Creates a conventional commit for the changes in AppNutri's working
 - Scope: affected area (for example `calc-engine`, `patients`, `harness`, `ci`). Omit only if truly cross-cutting.
 - English, imperative, present tense, single line, no body or footer, no `Co-Authored-By`.
 
-5. Create the commit. Don't push or open a PR unless the user explicitly asks; this repo may still not have a remote configured.
+5. Create the commit. Don't push unless the user explicitly asks for it, or unless you're inside `pr-prep`'s flow after `spec-closeout` is clean.
 
 ## Examples
 

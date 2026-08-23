@@ -19,4 +19,4 @@ description: Verifies that a spec under .kiro/specs/<slug>/ is ready to be close
 
 ## Output
 
-A short summary: requirements covered versus total, tasks completed versus blocked, documented deviations, pending gates if any. If everything is green, explicitly state that the spec is ready to close.
+A short summary: requirements covered versus total, tasks completed versus blocked, documented deviations, pending gates if any. If everything is green, explicitly state that the spec is ready to close and hand off to the `pr-prep` skill to open the PR.

@@ -33,11 +33,11 @@ No code is written without an approved spec. The flow:
 2. **Design** in `.kiro/specs/<slug>/design.md` (feature architecture).
 3. **Tasks** in `.kiro/specs/<slug>/tasks.md` (checklist with stable IDs and a validation command per task).
 
-Each phase requires explicit approval before moving to the next, and a clean adversarial `spec-grill` pass before it's even presented for approval. Use the `spec-plan` skill (`.agents/skills/spec-plan/SKILL.md`) to orchestrate this, or your tool's native plan mode if it has one (Claude Code). Implement already-approved tasks with the `task-runner` skill. Before closing a spec, run `spec-closeout`. Run `security-scan` before closing any spec that touches auth, patient data, or new dependencies.
+Each phase requires explicit approval before moving to the next, and a clean adversarial `spec-grill` pass before it's even presented for approval. Use the `spec-plan` skill (`.agents/skills/spec-plan/SKILL.md`) to orchestrate this, or your tool's native plan mode if it has one (Claude Code). Implement already-approved tasks with the `task-runner` skill, committing with the `commit` skill as you go. Before closing a spec, run `spec-closeout`. Run `security-scan` before closing any spec that touches auth, patient data, or new dependencies. Once `spec-closeout` is clean, use the `pr-prep` skill to open the PR.
 
 Hard rule: no code change without an approved task in `tasks.md` referencing a requirement. See `.agents/rules/spec-first.md`.
 
-**When describing or starting this flow, name the exact files you are using.** If asked how you would approach a task, answer with the actual skill and persona file names below, not a paraphrase in your own words. A description of "I'd write requirements, then design, then tasks, with a critical review in between" without naming `spec-plan`, `spec-grill`, `task-runner`, `spec-closeout`, and the relevant persona files means those files were not actually read.
+**When describing or starting this flow, name the exact files you are using.** If asked how you would approach a task, answer with the actual skill and persona file names below, not a paraphrase in your own words. A description of "I'd write requirements, then design, then tasks, with a critical review in between" without naming `spec-plan`, `spec-grill`, `task-runner`, `commit`, `spec-closeout`, `pr-prep`, and the relevant persona files means those files were not actually read.
 
 ## Agent catalog
 
@@ -79,7 +79,7 @@ Conventional commits, in English, single-line message, no co-author:
 <type>(<scope>): <description>
 ```
 
-Types: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `style`, `perf`. See `.agents/commands/commit.md`.
+Types: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `style`, `perf`. See the `commit` skill (`.agents/skills/commit/SKILL.md`). Once a spec's tasks are all done and `spec-closeout` is clean, use the `pr-prep` skill (`.agents/skills/pr-prep/SKILL.md`) to open the PR.
 
 ## Testing and security
 
@@ -99,8 +99,8 @@ Already active, with no dependency on `package.json`: `pre-commit` hooks (gitlea
 
 ## Tool-specific notes
 
-- **Claude Code**: full support. Subagent personas in `.claude/agents/`, skills in `.claude/skills/`, commands in `.claude/commands/`, rules in `.claude/rules/` (all symlinks into `.agents/`). See `CLAUDE.md`.
-- **OpenCode**: full support. Subagent personas in `.opencode/agents/`, skills in `.opencode/skills/`, commands in `.opencode/commands/` (symlinks into `.agents/`).
+- **Claude Code**: full support. Subagent personas in `.claude/agents/`, skills in `.claude/skills/`, rules in `.claude/rules/` (all symlinks into `.agents/`). See `CLAUDE.md`.
+- **OpenCode**: full support. Subagent personas in `.opencode/agents/`, skills in `.opencode/skills/` (symlinks into `.agents/`).
 - **Codex CLI**: supported natively. Codex reads this file (`AGENTS.md`) and scans `.agents/skills/` directly, with no symlink needed. Codex has no subagent concept, so it can't invoke `.agents/agents/*.md` as separate delegated agents the way Claude Code and OpenCode do. This does not mean skipping them: for every phase in the Agent catalog above, a Codex session must open and read the matching `.agents/agents/<name>.md` file, apply its checklist within the same session, and explicitly say "applying the `<name>` persona" before doing so. Naming the workflow in general terms (for example "I'd do a critical review of the spec") without opening and citing `spec-grill` and the relevant persona file(s) is not following this harness; it's a generic SDD description that happens to resemble it. If asked "how would you work this task" before any real work starts, still name every skill and every persona file that would apply, in order.
 
 ## Current repo state

@@ -13,8 +13,7 @@ Claude Code's native plan mode (`EnterPlanMode`/`ExitPlanMode`) serves the same 
 Everything lives in `.agents/` and is exposed here via symlink, a single place to maintain:
 
 - **Agents** (`.claude/agents/`, subagents invokable with `Agent({ subagent_type: ... })`): `developer`, `design`, `qa`, `security`, `code-quality`, `reviewer`, `nextjs-architect`, `database-architect`.
-- **Skills** (`.claude/skills/`): `spec-plan`, `spec-grill`, `task-runner`, `spec-closeout`, `security-scan`.
-- **Commands** (`.claude/commands/`): `commit`.
+- **Skills** (`.claude/skills/`): `spec-plan`, `spec-grill`, `task-runner`, `commit`, `spec-closeout`, `security-scan`, `pr-prep`.
 - **Always-active rules** (`.claude/rules/`): `tenant-isolation`, `contracts-before-code`, `spec-first`, `no-plaintext-clinical-data`, `pnpm-only`, `agent-anti-patterns`, `cost-optimization`, `human-escalation`.
 
 ## Folder conventions (once the scaffold exists)
