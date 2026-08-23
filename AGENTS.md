@@ -64,6 +64,7 @@ Claude Code and OpenCode can invoke these as actual subagents. Codex CLI cannot;
 - **RBAC always server-side**: the role (`ADMIN`/`NUTRITIONIST`/`FRONT_DESK`) is verified in Server Actions/Route Handlers, never only by hiding UI on the client.
 - **Body composition equations**: every new protocol is a self-contained module in `src/calc-engine/protocols/`; an existing protocol is never modified (traceability of already-calculated results, see `plan.md` §5).
 - **pnpm only**: never `npm` or `yarn`, in code, CI, or docs. Detail: `.agents/rules/pnpm-only.md`.
+- **Trunk-based development**: `main` is always deployable; every spec gets one short-lived branch (`<type>/<slug>`), created by `task-runner`, merged via `pr-prep`, deleted after merge. No direct commits to `main`, no long-lived branches. Detail: `.agents/rules/trunk-based.md`.
 
 ## Harness rules (how the agents themselves operate)
 

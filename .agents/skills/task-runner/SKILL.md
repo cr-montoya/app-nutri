@@ -9,6 +9,8 @@ description: Implements a single task already approved in .kiro/specs/<slug>/tas
 
 The task to implement must exist as an unchecked checkbox in an already-approved `tasks.md`. If there's no spec, or the task isn't in `tasks.md`, stop and use `spec-plan` first (see `.agents/rules/spec-first.md`).
 
+Before the first task of a spec, ensure the spec's branch exists and is checked out, per `.agents/rules/trunk-based.md`: create `<type>/<slug>` from up-to-date `main` if it doesn't exist yet, or check it out if resuming. Never implement a task while on `main`.
+
 ## Process
 
 1. Read the task (`T<phase>.<index>`), the `REQ-XXX` it references in `requirements.md`, and the relevant section of `design.md`.

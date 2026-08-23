@@ -17,7 +17,7 @@ If any of these are true, stop and report what's missing instead of opening a PR
 
 ## Branch
 
-Work for a spec happens on a branch named `<type>/<slug>`, where `<type>` matches the commit type (`feat`, `fix`, `refactor`, and so on) and `<slug>` matches `.kiro/specs/<slug>/`. If work was done directly on `main`, stop and tell the user; don't open a PR from `main` and don't create a branch retroactively without asking.
+`task-runner` already created the spec's branch per `.agents/rules/trunk-based.md` (`<type>/<slug>`). If the current branch is `main`, something skipped that step; stop and tell the user instead of opening a PR from `main` or creating a branch retroactively without asking.
 
 ## Process
 
@@ -39,3 +39,7 @@ Work for a spec happens on a branch named `<type>/<slug>`, where `<type>` matche
 - One spec, one PR. Don't bundle two specs into the same PR.
 - Never mark a checklist box you didn't actually verify; see `.agents/rules/agent-anti-patterns.md` on rubber-stamping.
 - You don't merge the PR. Opening it is the end of this skill; merging is a human decision.
+
+## After merge
+
+Once the human confirms the PR merged, clean up per `.agents/rules/trunk-based.md`: delete the branch (`git push origin --delete <branch>`, `git branch -d <branch>`), then `git checkout main && git pull` before starting the next spec.
