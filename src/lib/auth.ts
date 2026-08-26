@@ -33,6 +33,11 @@ declare module "next-auth" {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Vercel (and this local dev/CI setup) don't serve on one fixed host
+  // Auth.js can pin in advance: every preview deployment gets its own URL.
+  // Standard Auth.js v5 setting for that; see
+  // https://errors.authjs.dev#untrustedhost.
+  trustHost: true,
   session: {
     strategy: "jwt",
     maxAge: EIGHT_HOURS_IN_SECONDS,

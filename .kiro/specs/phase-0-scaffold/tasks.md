@@ -21,7 +21,7 @@ Branch: `feat/phase-0-scaffold`, created by `task-runner` from up-to-date `main`
 
 - [x] T3.1 Implement `src/lib/auth.ts`: Auth.js v5 config, Credentials provider using `@node-rs/argon2` to verify the password, JWT session carrying `userId` and `organizationId`, `maxAge` of 8 hours, and a `jwt()` callback that rejects the session if `tokenVersion` no longer matches the database. Validation: `pnpm test -- auth`. Closes REQ-008, REQ-009, REQ-010, REQ-011, REQ-018. 25/25 tests passing; also added `src/lib/auth-core.ts` (the testable REQ-008/009/018 logic, split out so the unit test doesn't have to load Auth.js's Next.js-runtime-only dependencies) and `src/app/api/auth/[...nextauth]/route.ts` (the route handler Auth.js needs, not separately called out in design.md's file list but required plumbing).
 - [x] T3.2 Implement `src/lib/rbac.ts`: a `requireRole` stub for later phases to build on. Validation: `pnpm test -- rbac`. 5/5 tests passing.
-- [ ] T3.3 Implement `src/middleware.ts` using Auth.js's `auth()` export as middleware, matcher scoped to `(app)/*`. Validation: `pnpm test:e2e -- auth-redirect`. Closes REQ-016.
+- [x] T3.3 Implement `src/middleware.ts` using Auth.js's `auth()` export as middleware, matcher scoped to `(app)/*`. Validation: `pnpm test:e2e -- auth-redirect`. Closes REQ-016. 4/4 Playwright tests passing. See design.md's Deviations for the Node.js Middleware runtime note and the matcher/allowlist approach.
 
 ## T4: Registration (REQ-001 through REQ-007, REQ-020, REQ-021)
 
