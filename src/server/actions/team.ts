@@ -6,7 +6,11 @@ import { Prisma, type Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { db, withTenant } from "@/lib/db";
 import { ForbiddenError, requireRole } from "@/lib/rbac";
-import { sendInviteSchema, acceptInviteSchema } from "@/validation/team";
+import {
+  sendInviteSchema,
+  acceptInviteSchema,
+  updateProfessionalProfileSchema,
+} from "@/validation/team";
 import { checkPasswordNotBreached, BreachedPasswordError } from "@/validation/auth";
 
 /**
@@ -26,11 +30,15 @@ const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // REQ-005: exactly 7 days
 class DuplicatePendingInviteError extends Error {}
 
 /**
- * Resolves the caller's session and their own Membership (for its `role`),
- * then applies `requireRole`. Throws `ForbiddenError` (no session, or a
- * session whose role isn't allowed) so callers only need one try/catch.
+ * Resolves the caller's session and their own Membership (for its `role` and
+ * `id`), then applies `requireRole` for `allowedRoles`. Throws
+ * `ForbiddenError` (no session, or a session whose role isn't allowed) so
+ * callers only need one try/catch. Generalized from the invite-only
+ * `requireAdminSession` (T2.2/T2.3) so T4.1's `updateProfessionalProfileAction`
+ * -- which needs `["ADMIN", "NUTRITIONIST"]`, not `["ADMIN"]` -- can share the
+ * same session+membership lookup instead of duplicating it.
  */
-async function requireAdminSession() {
+async function requireSession(allowedRoles: readonly Role[]) {
   const session = await auth();
   if (!session) {
     throw new ForbiddenError("No authenticated session.");
@@ -41,8 +49,14 @@ async function requireAdminSession() {
     (tx) => tx.membership.findUnique({ where: { userId: session.user.id } })
   );
 
-  requireRole(membership, ["ADMIN"]);
+  const requiredMembership = requireRole(membership, allowedRoles);
 
+  return { session, membership: requiredMembership };
+}
+
+/** `requireSession(["ADMIN"])`, kept as its own name for T2.2/T2.3's call sites. */
+async function requireAdminSession() {
+  const { session } = await requireSession(["ADMIN"]);
   return session;
 }
 
@@ -399,6 +413,73 @@ export async function acceptInviteAction(
     }
     throw error;
   }
+
+  return { success: true };
+}
+
+export interface UpdateProfessionalProfileActionResult {
+  success: boolean;
+  error?: string;
+}
+
+const GENERIC_PROFILE_VALIDATION_ERROR = "Please check your profile details and try again.";
+
+/**
+ * T4.1, closes REQ-017, REQ-018, REQ-019. `requireSession(["ADMIN",
+ * "NUTRITIONIST"])` rejects FRONT_DESK (REQ-018) and yields the caller's own
+ * Membership (`membership.id`), the only identifier this function ever uses
+ * to target a `Professional` row -- `input` (validated against
+ * `updateProfessionalProfileSchema`, T4.1) carries no id of any kind, so
+ * there is no client-writable way to target any profile but the caller's own
+ * (REQ-019, including for an ADMIN acting on another member's profile).
+ *
+ * `Professional.membershipId` is `@unique` (prisma/schema.prisma), so a
+ * `withTenant`-scoped `upsert` keyed on it is create-or-update in one call
+ * (REQ-017). Per src/lib/db.ts's `applyTenantScope`, the tenant-context
+ * extension injects `organizationId` into both the `where` and `create`
+ * branches and strips any from `update`, so it's never passed manually here.
+ */
+export async function updateProfessionalProfileAction(
+  input: unknown
+): Promise<UpdateProfessionalProfileActionResult> {
+  let session: Awaited<ReturnType<typeof requireSession>>["session"];
+  let membership: Awaited<ReturnType<typeof requireSession>>["membership"];
+  try {
+    ({ session, membership } = await requireSession(["ADMIN", "NUTRITIONIST"]));
+  } catch (error) {
+    if (error instanceof ForbiddenError) {
+      return { success: false, error: GENERIC_FORBIDDEN_ERROR };
+    }
+    throw error;
+  }
+
+  const parsed = updateProfessionalProfileSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: GENERIC_PROFILE_VALIDATION_ERROR };
+  }
+  const { licenseNumber, specialty } = parsed.data;
+
+  await withTenant(
+    { organizationId: session.organizationId, userId: session.user.id },
+    (tx) =>
+      // organizationId is a required scalar in Prisma's generated
+      // upsert-create-input type (same reason sendInviteAction's
+      // tx.invite.create above supplies it explicitly), so it must be
+      // passed here even inside withTenant; applyTenantScope (src/lib/db.ts)
+      // injects the real value into `create` regardless of what's passed,
+      // and strips any organizationId from `update` so this can never move
+      // a row to a different organization.
+      tx.professional.upsert({
+        where: { membershipId: membership.id },
+        create: {
+          membershipId: membership.id,
+          organizationId: session.organizationId,
+          licenseNumber,
+          specialty,
+        },
+        update: { licenseNumber, specialty },
+      })
+  );
 
   return { success: true };
 }

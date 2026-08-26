@@ -30,3 +30,28 @@ export const acceptInviteSchema = z.object({
 });
 
 export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
+
+/**
+ * Professional-profile validation (T4.1, closes REQ-017 through REQ-019).
+ * Deliberately has no id field of any kind (`membershipId`, `professionalId`,
+ * etc.) -- REQ-019 requires the profile a submission affects to always be
+ * "mine," derived server-side from the caller's session
+ * (updateProfessionalProfileAction), never from client-supplied input. Both
+ * fields are optional free text (schema.prisma's `Professional.licenseNumber`/
+ * `specialty` are nullable): an empty submitted value is normalized to
+ * `undefined` so `updateProfessionalProfileAction`'s upsert can clear a
+ * previously set value.
+ */
+const optionalProfileText = z
+  .string()
+  .trim()
+  .max(100)
+  .optional()
+  .transform((value) => (value === "" ? undefined : value));
+
+export const updateProfessionalProfileSchema = z.object({
+  licenseNumber: optionalProfileText,
+  specialty: optionalProfileText,
+});
+
+export type UpdateProfessionalProfileInput = z.infer<typeof updateProfessionalProfileSchema>;
