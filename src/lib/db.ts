@@ -108,8 +108,20 @@ export function applyTenantScope(
 }
 
 function createBaseClient() {
-  const url = process.env.APP_DATABASE_URL ?? process.env.DATABASE_URL;
-  return new PrismaClient(url ? { datasourceUrl: url } : undefined);
+  // No fallback to DATABASE_URL: that's the table-owning migration role,
+  // which bypasses RLS entirely (superuser locally; whatever Neon's
+  // default branch role turns out to be in production -- see
+  // .env.example). Silently running the app against it would quietly
+  // disable the whole RLS defense-in-depth layer instead of failing loudly
+  // on a misconfigured environment.
+  const url = process.env.APP_DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "APP_DATABASE_URL is not set. The app must connect with a non-superuser, " +
+        "non-owner role so Postgres RLS actually applies -- see .env.example."
+    );
+  }
+  return new PrismaClient({ datasourceUrl: url });
 }
 
 const CREATE_OPERATIONS = new Set(["create", "createMany"]);

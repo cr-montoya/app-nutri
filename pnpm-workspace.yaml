@@ -1,18 +1,18 @@
 allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
-  esbuild: set this to true or false
-  msgpackr-extract: set this to true or false
   prisma: true
   sharp: true
   unrs-resolver: true
-  workerd: set this to true or false
-minimumReleaseAgeExclude:
-  - '@prisma/client-runtime-utils@7.10.0'
-  - '@prisma/client@7.10.0'
-  - '@prisma/config@7.10.0'
-  - '@prisma/debug@7.10.0'
-  - '@prisma/engines@7.10.0'
-  - '@prisma/fetch-engine@7.10.0'
-  - '@prisma/get-platform@7.10.0'
-  - prisma@7.10.0
+overrides:
+  # Transitive deps pinned deep inside next/prisma at vulnerable versions
+  # (CVE-2026-33327/33328/35590/35591 for sharp; GHSA-6g55-p6wh-862q and
+  # GHSA-r28c-9q8g-f849 for postcss; GHSA-ggr8-5vv4-36mx for deepmerge-ts).
+  # `pnpm audit --audit-level=high` flagged these; none are direct
+  # dependencies of this project, and none of the vulnerable code paths are
+  # exercised (no next/image remote patterns, no untrusted CSS/source-map
+  # input), but forcing the patched versions is cheap and removes the
+  # finding rather than just documenting around it.
+  sharp: '>=0.35.0'
+  postcss: '>=8.5.18'
+  deepmerge-ts: '>=8.0.0'
