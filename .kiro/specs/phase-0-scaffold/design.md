@@ -4,7 +4,73 @@
 
 This is the first spec to touch the Prisma schema, so nothing existing is reused; instead this design establishes the exact patterns (`withTenant`, RLS policy shape, Server Action structure, route layout) that every later phase reuses without re-deciding. Layers touched, per `.kiro/steering/structure.md`: `prisma/schema.prisma`, `src/lib/db.ts`, `src/lib/auth.ts`, `src/server/actions/`, `src/middleware.ts`, `src/app/`.
 
-Specialist personas applied: `database-architect.md` (schema and RLS below) and `nextjs-architect.md` (routing below).
+Specialist personas applied: `database-architect.md` (schema and RLS below), `nextjs-architect.md` (routing below), and `security.md` (the deployed database-connection contract below).
+
+## Neon-Vercel runtime connection contract (REQ-022 through REQ-024)
+
+The Neon Vercel integration creates a separate database branch for each Preview deployment and supplies its pooled, branch-specific connection string as `DATABASE_URL`. The integration is configured in Neon to use `appnutri_app`, the non-owner, non-`BYPASSRLS` role created by the Phase 0 migration. Vercel exposes `VERCEL_ENV`, so the runtime can distinguish this trusted deployment environment from local tooling.
+
+`src/lib/db.ts` will resolve its runtime URL as follows:
+
+| Environment | Runtime connection | Reason |
+|---|---|---|
+| Vercel Preview / Production (`VERCEL_ENV` set) | `DATABASE_URL` | Neon updates it to the isolated branch URL for the selected restricted role. |
+| Local / tests (`VERCEL_ENV` unset) | `APP_DATABASE_URL` | Keeps the migration-owner `DATABASE_URL` unavailable to the local application runtime. |
+
+Both paths fail closed when their required variable is absent. There is no fallback from local `APP_DATABASE_URL` to `DATABASE_URL`, and no owner connection is configured in Vercel. `DATABASE_URL_UNPOOLED` remains managed by Neon but is not consumed by the application; Prisma 6 supports Neon's pooled URL for runtime queries.
+
+No Prisma schema, migration, tenant policy, RBAC rule, or UI changes are required. The security persona's review requires a live preview check using `SELECT current_user` with the deployed branch URL or Neon/Vercel integration metadata, confirming the configured role is `appnutri_app`, followed by an HTTP request to `/register`.
+
+This is the decision recorded in ADR-0003.
+
+## Preview security gates (REQ-025 through REQ-029)
+
+Specialist persona applied: `security.md` (CI/CD, DAST, SBOM, and secret-handling checklist). This section adds deployment security gates only; it does not alter application routes, Prisma schema, RLS, RBAC, or client-visible behavior.
+
+### DAST workflow
+
+`.github/workflows/dast.yml` will subscribe to GitHub's `deployment_status` event. A job runs only when all of these conditions are true:
+
+1. `deployment_status.state` is `success` and its `environment` is `Preview`.
+2. `deployment_status.environment_url` is present and is the scan target.
+3. The deployment SHA is associated with a pull request whose `head.repo.full_name` equals the current repository. The job queries GitHub's associated-pull-requests API with the read-only `GITHUB_TOKEN`; this excludes fork deployments before the bypass secret is made available.
+
+The workflow checks out the default branch to ensure the scanner's policy cannot be altered by the deployed pull-request code. It runs the maintained, commit-pinned `zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25` (release `v0.15.0`) with `allow_issue_writing: false`. The action's target is the deployment-status URL, its HTML/Markdown/JSON reports are uploaded under a deterministic artifact name, and no report is posted as a GitHub issue.
+
+Before invoking ZAP, a shell preflight checks that `VERCEL_AUTOMATION_BYPASS_SECRET` is non-empty without printing it. The ZAP step receives that value only through the action's supported environment contract:
+
+| Environment variable | Value |
+|---|---|
+| `ZAP_AUTH_HEADER` | `x-vercel-protection-bypass` |
+| `ZAP_AUTH_HEADER_VALUE` | `${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}` |
+| `ZAP_AUTH_HEADER_SITE` | origin of the Vercel Preview URL |
+
+The token is never interpolated into a shell command, workflow output, artifact name, issue, or repository file. It is consumed by Vercel at Deployment Protection before the request reaches the application. Preview protection stays enabled; no configuration makes a Preview URL public.
+
+`.zap/rules.tsv` is the committed ZAP Baseline policy. It makes missing `HttpOnly` (`10010`) and `Secure` (`10011`) cookie flags `FAIL`, because they are required for the Auth.js session cookie. All other initial baseline rules are `WARN` so they are reported and triaged before becoming merge-blocking policy; a later change to the policy must update this file and its rationale in the PR. ZAP's exit status therefore blocks a preview only for the explicit `FAIL` rules, as required by REQ-027.
+
+### SBOM and repository documentation
+
+The repository will rely on pnpm's built-in SBOM command, not the shadowed `package.json` script. The documented and CI command is:
+
+```bash
+mkdir -p artifacts
+pnpm sbom --sbom-format cyclonedx > artifacts/sbom.cdx.json
+```
+
+`security.yml` will add a `sbom` job for pull requests. It checks out the PR ref, runs the command above, validates that `artifacts/sbom.cdx.json` is non-empty JSON, and uploads it with `actions/upload-artifact` pinned by commit. The SBOM has no secret inputs and its generated `artifacts/` directory is ignored by Git.
+
+`README.md` will use pnpm-only commands and the RLS validation checklist in this document will mark the positive and negative tests as completed with their real test commands.
+
+### Failure behavior
+
+| Condition | Result |
+|---|---|
+| Vercel Preview has not succeeded, has no URL, is not `Preview`, or belongs to a fork | No DAST job runs and no secret is accessed. |
+| Required GitHub secret is absent | DAST job fails before ZAP starts; Preview protection remains enabled. |
+| ZAP rule classified as `FAIL` fires | DAST job fails and uploads the report. |
+| ZAP warning fires | DAST job passes but uploads the report for triage. |
+| SBOM command or JSON validation fails | SBOM job fails and no successful artifact is reported. |
 
 ## Schema (database-architect)
 
@@ -81,8 +147,8 @@ CREATE POLICY tenant_isolation ON professionals
 
 - [x] `ENABLE ROW LEVEL SECURITY` present on both tables.
 - [x] Both policies reference `current_setting('app.current_org_id', true)`, set server-side only (see Tenant-context propagation below), never a client-supplied value.
-- [ ] Positive test (task, not yet run): a session scoped to org A reads/writes its own `Membership`/`Professional` rows. Satisfies REQ-012.
-- [ ] Negative test (task, not yet run): a raw `psql`/`pg` client with `app.current_org_id` set to org A gets zero rows querying org B directly, bypassing Prisma entirely. Satisfies REQ-013.
+- [x] Positive test: `pnpm test -- rls-positive` passes against the Neon app role, proving an org A session reads/writes its own `Membership`/`Professional` rows. Satisfies REQ-012.
+- [x] Negative test: `pnpm test -- rls-negative` passes against the Neon app role, proving a raw `pg` client scoped to org A gets zero rows for org B. Satisfies REQ-013.
 - [x] Policy overhead: both policies filter on an indexed column (`organizationId` on both tables), so no sequential scan risk at any realistic Phase 0 scale.
 
 Both boxes without a task yet are written up as concrete tasks in `tasks.md`, not left implicit.
@@ -136,6 +202,14 @@ Request → middleware.ts (auth() checks session exists) →
 | REQ-019 | Vercel project connected to the GitHub repo with Neon's Vercel integration for per-PR branching; a configuration task, not application code |
 | REQ-020 | `Membership.userId @unique` in the schema above |
 | REQ-021 | Zod length validation on the name field in `src/validation/auth.ts`, same file/pattern as REQ-006's org-name check |
+| REQ-022 | Runtime URL resolver in `src/lib/db.ts`, selecting the Vercel-provided Neon URL only when `VERCEL_ENV` is present |
+| REQ-023 | Neon integration configured for `appnutri_app`; deployment validation confirms the restricted current user, never an owner connection |
+| REQ-024 | A redeployed PR preview uses the dynamic Neon URL and serves `/register` |
+| REQ-025 | `.github/workflows/dast.yml`, triggered by successful internal Vercel Preview deployment status, uses the commit-pinned OWASP ZAP Baseline action |
+| REQ-026 | DAST preflight plus ZAP action header environment; only GitHub Actions injects the masked bypass secret |
+| REQ-027 | `.zap/rules.tsv` and the ZAP artifact configuration; only explicit `FAIL` policy rules block the job |
+| REQ-028 | `security.yml` SBOM job runs pnpm's CycloneDX command, validates its JSON, and uploads the artifact |
+| REQ-029 | pnpm-only README commands and the completed RLS validation records above |
 
 ## Files to create or update
 
@@ -143,6 +217,7 @@ Request → middleware.ts (auth() checks session exists) →
 prisma/schema.prisma                          # new: Organization, User, Membership, Professional, Role
 prisma/migrations/.../migration.sql            # generated; includes the RLS statements above, added manually after prisma migrate dev
 src/lib/db.ts                                  # new: Prisma Client Extension, withTenant
+src/lib/db.test.ts                             # update: unit coverage for local versus Vercel runtime URL resolution
 src/lib/auth.ts                                # new: Auth.js v5 config, Credentials provider, jwt()/session() callbacks
 src/lib/rbac.ts                                # new: requireRole stub
 src/server/actions/auth.ts                     # new: registerAction
@@ -153,6 +228,11 @@ src/app/(auth)/login/page.tsx                  # new
 src/app/(app)/[orgSlug]/layout.tsx             # new: session/org-slug check
 src/app/(app)/[orgSlug]/dashboard/page.tsx     # new
 package.json, pnpm-lock.yaml                   # new: Next.js, Prisma, Auth.js, @node-rs/argon2, Zod, Tailwind, shadcn deps
+.github/workflows/dast.yml                      # new: protected Vercel Preview ZAP Baseline gate
+.github/workflows/security.yml                  # update: PR SBOM artifact job
+.zap/rules.tsv                                  # new: versioned ZAP Baseline policy
+.gitignore                                      # update: generated artifacts directory
+README.md                                       # update: pnpm-only local commands
 ```
 
 ## Multi-tenant isolation and RBAC impact
@@ -165,4 +245,17 @@ Everything is new; this phase has no prior code to reuse. It exists specifically
 
 ## Deviations
 
-None yet; this section is for `spec-closeout` to fill in if implementation diverges from this design.
+- **`checkPasswordNotBreached` (`src/validation/auth.ts`) fails open when the HIBP range API is unreachable or errors**, rather than blocking every registration on a third-party outage. REQ-005 doesn't specify this failure mode. Only the password's SHA-1 hash prefix (5 hex chars, k-anonymity) is ever sent, never the password or its full hash.
+- **`src/middleware.ts` opts into Next.js 15's Node.js Middleware (`export const runtime = "nodejs"`)**, not the default Edge runtime. REQ-018 requires the `tokenVersion` check on every session read, including from middleware; that check calls Prisma (`node:async_hooks`, native/WASM `@node-rs/argon2` transitively through the shared Auth.js config), none of which the Edge runtime supports. Middleware's matcher also can't literally express "`(app)/*`" as design.md's routing table says, since Next.js strips route groups from the URL; it runs on every path except static assets and explicitly allowlists the public auth routes (`/`, `/login`, `/register`, `/api/auth/*`) instead, which is the documented Auth.js v5 pattern for this exact case.
+- **`slugify` lives in `src/server/services/organization-slug.ts`, not inside `src/server/actions/auth.ts`** despite design.md's coverage table describing it as part of `registerAction`. Next.js requires every export from a `"use server"` file to itself be an async Server Action; `slugify` is a small sync pure helper, so it's a compile error to export it alongside `registerAction` in the same file. Matches `.kiro/steering/structure.md`'s placement rule ("new use case/orchestration -> src/server/actions/ or src/server/services/").
+- **Login needed a second, narrower RLS bootstrap fix beyond registration's.** `authorizeCredentials` (src/lib/auth-core.ts) has to find which organization a user belongs to *before* any tenant session exists to scope that lookup by -- there is no `organizationId` to `SET LOCAL` yet, unlike `registerAction`, because finding it is the whole point of the query. A plain `db.user.findUnique({ include: { membership: true } })` silently returned zero membership rows (RLS blocking the join, `app.current_org_id` unset) and made every login fail with `CredentialsSignin`, caught by `tests/e2e/login.spec.ts` actually running against Postgres. Fixed with a narrow `SECURITY DEFINER` Postgres function, `get_membership_for_login(userId)` (migration `20260826054241_login_membership_lookup_function`), grantable only to `appnutri_app` and returning only `organizationId`/`role` for one specific `userId` -- not a blanket RLS bypass. That same migration also formalizes the `appnutri_app` role's creation and table grants as an idempotent migration instead of the ad hoc local `psql` session T2.3 originally set it up with, so a fresh database (Neon, CI) can reach the same state via `prisma migrate deploy` alone; a password still has to be set out-of-band per environment (`ALTER ROLE appnutri_app PASSWORD '...'`) so no secret is committed to a migration file.
+- **`src/server/actions/session.ts` (`loginAction`, `logoutAction`) is a separate file from `src/server/actions/auth.ts` (`registerAction`)**, for the same reason `src/lib/auth-core.ts` is split from `src/lib/auth.ts`: importing the actual `NextAuth(...)` instance (`@/lib/auth`) pulls in Auth.js's Next.js-runtime-only dependencies, which made `tests/integration/register-action.test.ts` fail to load under Vitest when `loginAction`/`logoutAction` lived in the same file.
+- **`src/app/page.tsx` (the root landing page) is now a Server Component that checks `auth()` and renders a "Log out" button wired to `logoutAction` when a session exists**, instead of always showing "Log in". This wasn't in design.md's file list, but T5.2 needs *some* real UI to click through end-to-end (`tests/e2e/logout.spec.ts`), and the org-slug workspace routes that would normally host this don't exist until T6.
+- **Security review findings (T1-T3 gate, `security` persona) and their resolutions:**
+  - `src/lib/db.ts`'s `createBaseClient()` used to silently fall back to `DATABASE_URL` (the RLS-bypassing owner role) if `APP_DATABASE_URL` was unset, which would quietly disable the entire RLS defense-in-depth layer in a misconfigured environment. Fixed: it now throws at startup if `APP_DATABASE_URL` isn't set, no fallback.
+  - `pnpm audit --audit-level=high` had 4 high findings, all transitive (`sharp`/`postcss` pinned inside `next`'s own dependency tree; `deepmerge-ts` inside `@prisma/config`), none from a direct dependency this project chose. Fixed via `pnpm-workspace.yaml`'s `overrides`, forcing the patched versions; `pnpm audit --audit-level=high` is clean and `pnpm build`/`pnpm test` still pass with the overrides applied.
+  - The RLS policies' `WITH CHECK` was implicit (Postgres derives it from `USING` for a `FOR ALL` policy with none specified) rather than written out, which works today but could silently regress if a future edit changes `USING` without adding `WITH CHECK`. Fixed via migration `20260826052804_rls_explicit_with_check`, `ALTER POLICY ... WITH CHECK (...)` added explicitly; no behavior change, existing RLS tests pass unchanged.
+  - **Not actioned, by design**: the review flagged the Credentials auth endpoint (`/api/auth/[...nextauth]`, live once T3.1 landed even with no login UI yet) as lacking rate limiting. `requirements.md`'s "Out of scope" section already explicitly defers "authentication rate limiting" to Phase 5 (`plan.md` §8); adding it now would be scope creep beyond this spec's approved requirements, not a gap this spec left open. Recorded here so it isn't silently dropped, and flagged again for whoever plans Phase 5.
+- **`registerAction` (`src/server/actions/auth.ts`) calls `set_config('app.current_org_id', ...)` manually inside its transaction, right after creating the `Organization` and before creating the `Membership`.** The RLS policy on `memberships` has no separate `WITH CHECK`, so Postgres uses its `USING` clause for INSERT too (design.md's "RLS policy" section); without this, RLS itself -- not the Prisma extension -- rejects the bootstrap `Membership` insert, because nothing has set `app.current_org_id` yet in a transaction that never calls `withTenant`. This was caught by `tests/integration/register-action.test.ts` actually running against Postgres, not by the Prisma-layer bootstrap exception alone. It's the bootstrap case's equivalent of what `withTenant` does automatically.
+- **`withTenant`'s guard makes a documented exception for `create`/`createMany` on a tenant-scoped model.** Every other operation (read, update, delete) on `Membership`/`Professional` throws if called outside `withTenant`. `create`/`createMany` are allowed outside it *only* if `organizationId` is already present in the payload (TypeScript already requires this, since it's a non-optional scalar in the generated Prisma create-input type), because REQ-001 requires `registerAction` (T4.2) to create a brand-new organization's very first `User` + `Organization` + `Membership` atomically in one `db.$transaction`, before any tenant session exists to derive a `withTenant` context from. Inside `withTenant`, the extension still always overwrites `organizationId` with the context's value regardless of what a caller passes in `data`, so this exception never lets a caller's `organizationId` value survive when a real tenant context is active; see `src/lib/db.ts` and the "prove the override" comment in `tests/integration/rls-positive.test.ts`.
+- **Prisma pinned to `6.19.3`, not the `latest`/`prev` dist-tag (`7.x`/`8.x`).** As of implementation, Prisma 7 made the classic `datasource { url = env("DATABASE_URL") }` schema syntax invalid, requiring a `prisma.config.ts` and a driver adapter (`@prisma/adapter-pg` or similar) passed explicitly to the `PrismaClient` constructor instead. That's a real architecture decision (which adapter, how it composes with the `withTenant`/`AsyncLocalStorage` pattern and Neon's serverless driver) that isn't in this design and wasn't debated. Rather than silently absorb it mid-task, this implementation stays on the latest Prisma 6.x (`6.19.3`), which keeps the schema-based `url = env(...)` datasource and plain `new PrismaClient()` this design assumes. Revisiting the Prisma 7 driver-adapter migration is a follow-up for its own spec/ADR, not something folded into Phase 0.

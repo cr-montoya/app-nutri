@@ -2,7 +2,7 @@
 
 ## Objective
 
-Stand up the Next.js/Prisma/Neon scaffold with working registration and login, and prove the two-layer multi-tenant isolation model (Prisma Client Extension + Postgres RLS) actually holds between two organizations before any real clinical feature is built on top of it. This is the foundation every later phase depends on.
+Stand up the Next.js/Prisma/Neon scaffold with working registration and login, and prove the two-layer multi-tenant isolation model (Prisma Client Extension + Postgres RLS) actually holds between two organizations before any real clinical feature is built on top of it. This includes a Vercel preview contract that consumes Neon's per-PR connection safely. This is the foundation every later phase depends on.
 
 ## User stories
 
@@ -10,6 +10,8 @@ Stand up the Next.js/Prisma/Neon scaffold with working registration and login, a
 - As a registered user, I want to log in securely, so that I can access my organization's workspace.
 - As an authenticated user, I want to see a dashboard scoped to my organization, so that I can confirm the app recognizes my identity and tenant context correctly.
 - As the platform, data belonging to one organization must never be visible to another, under any query path, so that a bug in one Server Action can't leak one clinic's data into another's.
+- As the platform operator, I want each Vercel preview to use its own least-privilege Neon connection, so that preview deployments cannot bypass RLS or access another preview's database branch.
+- As the platform operator, I want each successful Vercel preview to receive an automated passive security scan without making the preview public, so that deployment protection remains enabled while security regressions are detected before merge.
 
 ## Requirements
 
@@ -34,6 +36,14 @@ Stand up the Next.js/Prisma/Neon scaffold with working registration and login, a
 - **REQ-019**: WHEN a pull request is opened against `main`, THE SYSTEM SHALL deploy a Vercel preview environment backed by a per-PR Neon database branch.
 - **REQ-020**: THE SYSTEM SHALL ALWAYS enforce at most one `Membership` per `User`, at the database level, not only in application code. This makes "one organization per user" (see Out of scope) an actual constraint, not just an assumption the UI happens not to violate yet.
 - **REQ-021**: WHEN a visitor submits a name shorter than 1 character (empty after trimming) or longer than 100 characters, THE SYSTEM SHALL reject the registration before creating any record.
+- **REQ-022**: WHEN the application runs in a Vercel Preview or Production environment, THE SYSTEM SHALL use the Neon integration's `DATABASE_URL` as its runtime database connection and SHALL fail before serving a request when that variable is absent.
+- **REQ-023**: THE SYSTEM SHALL ALWAYS require the `DATABASE_URL` supplied to Vercel by the Neon integration to authenticate as the non-owner, non-`BYPASSRLS` role `appnutri_app`; the owner connection used for Prisma migrations SHALL NOT be available to the deployed application runtime.
+- **REQ-024**: WHEN a pull request preview is deployed, THE SYSTEM SHALL connect through `DATABASE_URL` to the Neon branch created for that preview and SHALL successfully serve the registration page without a missing-database-connection error.
+- **REQ-025**: WHEN GitHub receives a successful Vercel Preview deployment status for a pull request whose head branch belongs to this repository, THE SYSTEM SHALL run OWASP ZAP Baseline against that deployment URL using the maintained `zaproxy/action-baseline` GitHub Action, without invoking a JavaScript package-manager command to run DAST. THE SYSTEM SHALL NOT run DAST for deployments originating from a fork.
+- **REQ-026**: WHEN the DAST workflow accesses a Vercel-protected preview, THE SYSTEM SHALL supply the protection bypass only from the GitHub Actions secret `VERCEL_AUTOMATION_BYPASS_SECRET`, SHALL send it as an HTTP header, and SHALL NOT write the secret to source control, workflow output, issue content, or scan artifacts. WHEN that secret is unavailable, THE SYSTEM SHALL fail before invoking the scan and SHALL NOT make the preview public.
+- **REQ-027**: WHEN the DAST workflow completes, THE SYSTEM SHALL upload its ZAP report as a GitHub Actions artifact and SHALL fail the workflow for alerts configured as `FAIL` in the committed ZAP rules file; alerts not explicitly classified as `FAIL` SHALL remain visible in the report without failing the workflow.
+- **REQ-028**: WHEN `pnpm sbom --sbom-format cyclonedx > artifacts/sbom.cdx.json` is run in a clean checkout, THE SYSTEM SHALL generate a CycloneDX JSON SBOM at `artifacts/sbom.cdx.json`; WHEN a pull request workflow runs, THE SYSTEM SHALL upload that file as a GitHub Actions artifact.
+- **REQ-029**: THE SYSTEM SHALL ALWAYS document local development commands using `pnpm` only and SHALL accurately record the completed positive and negative RLS validation status in the Phase 0 design.
 
 ## Out of scope
 
@@ -43,5 +53,7 @@ Stand up the Next.js/Prisma/Neon scaffold with working registration and login, a
 - Email verification and password reset (no email-sending provider has been chosen yet).
 - MFA/TOTP, authentication rate limiting, field-level encryption, and the Habeas Data consent flow (all explicitly Phase 5 in `plan.md` §8).
 - Production Vercel deployment pipeline; only PR preview deploys are required in this phase.
+- Automating Prisma migrations from Vercel or GitHub Actions. The Neon base branch is migrated by an operator before it becomes the parent for preview branches; a later infrastructure spec will automate future migration promotion.
+- Active DAST, authenticated application-flow scanning, and scanning Production. This phase uses only OWASP ZAP Baseline's passive scan against the successful Preview deployment.
 - Any `Patient`, `ClinicalHistory`, `Appointment`, `Consultation`, or related UI (Phase 1 and later).
 - A user-facing path that creates a `Professional` record. Which membership roles can hold a `Professional` profile, and the UI to create one, are defined in a later spec (`phase-1a-team-invites`). The model and its RLS policy are still implemented and tested in this phase, exercised with seed data inserted directly, not through a UI flow.

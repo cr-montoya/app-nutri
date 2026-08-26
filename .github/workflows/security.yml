@@ -38,3 +38,21 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+
+  sbom:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+      - name: Generate CycloneDX SBOM
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          pnpm sbom --sbom-format cyclonedx > artifacts/sbom.cdx.json
+          jq -e 'type == "object"' artifacts/sbom.cdx.json > /dev/null
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sbom-cyclonedx
+          path: artifacts/sbom.cdx.json
+          if-no-files-found: error
