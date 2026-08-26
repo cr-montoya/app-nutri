@@ -72,7 +72,7 @@ Core entities and their purpose:
 - **BodyCompositionResult**: result calculated from a measurement, **tagged with the protocol/equation used** (`protocolKey`, `protocolLabel`), with a JSON snapshot of inputs and outputs. Never overwritten: every calculation (even a recalculation with a different protocol) creates a new record, for traceability and protocol comparison over time.
 - **NutritionalPlan**: 1:1 with `Consultation`. Target calories, macros, meal plan (JSON), recommendations, validity period.
 - **PatientAttachment**: attached file (progress photo, lab PDF) stored in Vercel Blob, with `organizationId`, a reference to the patient and/or consultation, and metadata (type, upload date, uploaded by).
-- **AuditLog**: who (userId) did what (`action`) to which entity (`entityType`, `entityId`) and when, with metadata and IP. Mandatory for every write to `ClinicalHistory`, `Consultation`, `AnthropometricMeasurement`, `NutritionalPlan`, `PatientAttachment`; for reads, at minimum on `ClinicalHistory` and `Consultation` detail views.
+- **AuditLog**: who (userId) did what (`action`) to which entity (`entityType`, `entityId`) and when, with metadata and IP. Mandatory for every write to `Patient`, `ClinicalHistory`, `Consultation`, `AnthropometricMeasurement`, `NutritionalPlan`, `PatientAttachment`; for reads, at minimum on `Patient`, `ClinicalHistory`, and `Consultation` detail views.
 
 Every tenant-scoped table has an indexed `organizationId`.
 

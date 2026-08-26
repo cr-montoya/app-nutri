@@ -8,7 +8,8 @@
 -- invites' token-scoped branch): every Patient action requires an
 -- authenticated session (REQ-019), and every AuditLog write happens from
 -- inside an already-tenant-scoped action. WITH CHECK is explicit from the
--- start (design.md), same as invites, not left to the implicit
+-- start here (design.md's own RLS section only shows USING, but this
+-- follows invites' migration instead), not left to the implicit
 -- USING-doubles-as-WITH-CHECK behavior phase-0-scaffold initially relied
 -- on for memberships/professionals.
 
