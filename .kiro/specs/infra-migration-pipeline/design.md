@@ -16,18 +16,21 @@ The credential-acquisition design follows ADR-0004 (split credentials), which fo
 | REQ-004 | A bounded poll loop (concrete budget below) against Neon's list-branches API before giving up |
 | REQ-005 | Two dedicated GitHub Actions secrets (below), neither ever set in Vercel's environment variables — verified as a task validation step |
 | REQ-006 | Same two secrets; `NEON_PROJECT_ID`/`NEON_MIGRATION_ROLE_NAME`/`NEON_DATABASE_NAME` are non-sensitive on their own (none grant access without `NEON_API_KEY`) and live as GitHub Actions **variables**, not secrets |
-| REQ-007 | Both jobs run `prisma migrate deploy` with `set -euo pipefail`; any failure (migration error, branch never found, curl failure) is a non-zero exit, which GitHub reports as a failed check |
+| REQ-007 | Both jobs run `prisma migrate deploy`; the lookup script uses `set -euo pipefail`, and every migration, lookup, or advisory-lock timeout exits non-zero as a failed GitHub check |
 | REQ-008 | `prisma migrate deploy` itself guarantees this; the pipeline adds no wrapping logic that could break it |
-| REQ-009 | Not solved by new code — named explicitly as relying on `prisma migrate deploy`'s built-in advisory lock, per requirements.md |
+| REQ-009 | No custom concurrency mechanism: Prisma's Postgres advisory lock serializes concurrent commands; its 10-second timeout fails visibly and a later idempotent rerun is safe |
 | REQ-010 | New workflow files only; `package.json`'s `build` script (already fixed to run `prisma generate && next build --turbopack` for the `phase-1a-team-invites` Vercel failure) is untouched by this spec |
 | REQ-011 | No branch-cleanup logic added; not needed |
+| REQ-012 | `paths: ["prisma/migrations/**"]` limits automatic `push` and `pull_request` runs; `workflow_dispatch` remains an explicit manual exception |
+| REQ-013 | `workflow_dispatch` exposes the optional repository preview-branch input; it checks out only the trusted default-branch workflow revision, never caller-supplied code |
+| REQ-014 | Both jobs install dependencies with `pnpm install --frozen-lockfile --ignore-scripts`; no package lifecycle script runs in a credential-bearing job |
 
 ## Credentials (ADR-0004)
 
 Two new GitHub Actions secrets, provisioned by the operator (out of scope for this spec's tasks, same as `appnutri_app`'s local password in `phase-0-scaffold`):
 
-- `PROD_MIGRATION_DATABASE_URL` — a direct Postgres connection string for a schema-modification-capable role on the production Neon branch. Reuses whichever role/credential was originally used to apply `phase-0-scaffold`'s migrations to production (Neon's default project role, already present without extra provisioning), unless the operator prefers to provision a narrower dedicated role at that time — either is compatible with this design, the workflow only needs *a* working connection string in this secret. Never touched by any Neon API call.
-- `NEON_API_KEY` — a **project-scoped** Neon API key (Editor access, per Neon's current key-scoping model; there is no narrower/read-only key type available), used exclusively by the `migrate-preview` job to look up a PR's branch and its connection URI. Never used for anything touching the production branch.
+- `PROD_MIGRATION_DATABASE_URL` — a direct Postgres connection string for a dedicated, schema-modification-capable role on the production Neon branch. It is never a Vercel runtime credential and is never touched by a Neon API call.
+- `NEON_API_KEY` — a **project-scoped** Neon API key with the minimum project permission that can retrieve a connection URI (currently Editor; Viewer cannot retrieve connection strings), used exclusively by `migrate-preview`. It never touches the production branch.
 
 Plus three non-secret GitHub Actions **variables** (none grant access on their own without `NEON_API_KEY`):
 
@@ -51,6 +54,9 @@ Lookup sequence:
 # .github/workflows/migrate.yml
 name: migrate
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -71,8 +77,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@<pinned-sha>
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.repository.default_branch || github.sha }}
       - uses: pnpm/action-setup@<pinned-sha>
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm exec prisma migrate deploy
         env:
           DATABASE_URL: ${{ secrets.PROD_MIGRATION_DATABASE_URL }}
@@ -85,6 +93,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@<pinned-sha>
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.event.repository.default_branch }}
       - name: Resolve preview branch connection string
         id: neon
         env:
@@ -113,7 +123,7 @@ jobs:
           echo "::add-mask::$uri"
           echo "database_url=$uri" >> "$GITHUB_OUTPUT"
       - uses: pnpm/action-setup@<pinned-sha>
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm exec prisma migrate deploy
         env:
           DATABASE_URL: ${{ steps.neon.outputs.database_url }}
@@ -121,7 +131,7 @@ jobs:
 
 Action versions are pinned by SHA at implementation time (matching `dast.yml`'s existing convention of pinned third-party actions), not written out here since the current SHAs aren't known until the task actually runs `dependabot`/checks the tag.
 
-`workflow_dispatch` exists so this spec's own tasks (and any operator, later) have a way to exercise both jobs on demand — including proving the pipeline works at all once the operator secrets exist — without needing an actual migration file change to trigger the `paths:` filter. It's restricted to repository collaborators by GitHub's own permission model (not a `pull_request`-shaped trigger), so REQ-003's fork concern doesn't apply to it.
+`workflow_dispatch` exists so this spec's own tasks (and any operator, later) have a way to exercise both jobs on demand — including proving the pipeline works at all once the operator secrets exist — without needing an actual migration file change to trigger the `paths:` filter. It is restricted to repository collaborators by GitHub's own permission model, checks out the workflow's selected trusted revision rather than an input branch, and therefore never executes fork-originated code.
 
 ## Multi-tenant isolation and RBAC impact
 
@@ -137,12 +147,13 @@ Reused: `prisma migrate deploy` (no new migration-running logic, just automating
 .github/workflows/migrate.yml            # new: migrate-production and migrate-preview jobs
 docs/testing-and-security.md              # update: A05 row currently says "Secrets only in Vercel environment variables" -- no longer accurate once PROD_MIGRATION_DATABASE_URL/NEON_API_KEY exist as GitHub Actions-only secrets; reword to name both locations explicitly
 docs/adr/0004-split-migration-credentials.md   # already created during this phase
+docs/adr/README.md                        # add the ADR-0004 index row
 ```
 
 ## Operator setup (outside version control, before T1 can be validated)
 
-1. Confirm or provision the production migration role's connection string; store it as the `PROD_MIGRATION_DATABASE_URL` GitHub Actions secret.
-2. Create a project-scoped Neon API key (Editor access — no narrower option exists); store it as the `NEON_API_KEY` secret.
+1. Provision the dedicated production migration role's connection string; store it as the `PROD_MIGRATION_DATABASE_URL` GitHub Actions secret.
+2. Create a project-scoped Neon API key with the minimum permission that can retrieve a connection URI (currently Editor); store it as the `NEON_API_KEY` secret.
 3. Add `NEON_PROJECT_ID`, `NEON_MIGRATION_ROLE_NAME` (matching whichever role `PROD_MIGRATION_DATABASE_URL` uses), and `NEON_DATABASE_NAME` as GitHub Actions repository variables.
 
 `task-runner` cannot perform these steps itself (no Neon dashboard/API credential access from this environment, and doesn't need one — that's the entire point of REQ-005/006). Tasks that depend on these existing will validate their *presence* (`gh secret list`, `gh variable list`) rather than their values.
