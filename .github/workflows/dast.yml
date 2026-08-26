@@ -1,0 +1,67 @@
+name: dast
+
+on:
+  deployment_status:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  zap-baseline:
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      github.event.deployment_status.environment == 'Preview' &&
+      github.event.deployment_status.environment_url != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify an internal pull request owns the deployment
+        id: deployment
+        env:
+          DEPLOYMENT_SHA: ${{ github.event.deployment.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          internal_pr="$(gh api \
+            --paginate \
+            "/repos/${GITHUB_REPOSITORY}/commits/${DEPLOYMENT_SHA}/pulls" \
+            -H "Accept: application/vnd.github+json" \
+            --jq ".[] | select(.head.repo.full_name == \"${GITHUB_REPOSITORY}\") | .number" \
+            | head -n 1)"
+
+          if [ -z "${internal_pr}" ]; then
+            echo "No internal pull request is associated with this deployment; skipping DAST."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "run=true" >> "$GITHUB_OUTPUT"
+          echo "target=${{ github.event.deployment_status.environment_url }}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.deployment.outputs.run == 'true'
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Require Vercel automation bypass secret
+        if: steps.deployment.outputs.run == 'true'
+        env:
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_AUTOMATION_BYPASS_SECRET"
+
+      - name: OWASP ZAP Baseline Scan
+        if: steps.deployment.outputs.run == 'true'
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        env:
+          ZAP_AUTH_HEADER: x-vercel-protection-bypass
+          ZAP_AUTH_HEADER_VALUE: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          ZAP_AUTH_HEADER_SITE: ${{ github.event.deployment_status.environment_url }}
+        with:
+          target: ${{ steps.deployment.outputs.target }}
+          rules_file_name: .zap/rules.tsv
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-baseline-preview

@@ -1,0 +1,3 @@
+# Rule ID	Status	Description
+10010	FAIL	Cookie without HttpOnly flag
+10011	FAIL	Cookie without Secure flag
