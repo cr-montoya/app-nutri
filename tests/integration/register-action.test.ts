@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { registerAction, slugify } from "@/server/actions/auth";
+import { registerAction } from "@/server/actions/auth";
+import { slugify } from "@/server/services/organization-slug";
 import { adminDb } from "../helpers/admin-db";
 
 /**

@@ -4,6 +4,7 @@ import { hash } from "@node-rs/argon2";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { registerSchema, checkPasswordNotBreached, BreachedPasswordError } from "@/validation/auth";
+import { slugify } from "@/server/services/organization-slug";
 
 /**
  * REQ-001, REQ-002, REQ-007, REQ-020: creates a brand-new organization's
@@ -22,22 +23,6 @@ export interface RegisterActionResult {
 
 const GENERIC_EMAIL_TAKEN_ERROR = "An account with this email already exists.";
 const GENERIC_VALIDATION_ERROR = "Please check your registration details and try again.";
-
-/**
- * REQ-007: base slug from the organization name, ASCII-folded and
- * hyphenated. The disambiguation suffix is appended by the caller's loop,
- * not here.
- */
-export function slugify(organizationName: string): string {
-  const slug = organizationName
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // strip diacritics
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return slug.length > 0 ? slug : "org";
-}
 
 export async function registerAction(input: unknown): Promise<RegisterActionResult> {
   const parsed = registerSchema.safeParse(input);
