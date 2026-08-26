@@ -31,8 +31,8 @@ Branch: `feat/phase-0-scaffold`, created by `task-runner` from up-to-date `main`
 
 ## T5: Login and session (REQ-008, REQ-009, REQ-015)
 
-- [ ] T5.1 Build `src/app/(auth)/login/page.tsx` and its form component, wired to Auth.js `signIn`, showing the generic error from REQ-009 on failure. Validation: `pnpm test:e2e -- login`. Closes REQ-008, REQ-009.
-- [ ] T5.2 Wire logout (`signOut`) with a redirect to `/login`. Validation: `pnpm test:e2e -- logout`. Closes REQ-015.
+- [x] T5.1 Build `src/app/(auth)/login/page.tsx` and its form component, wired to Auth.js `signIn`, showing the generic error from REQ-009 on failure. Validation: `pnpm test:e2e -- login`. Closes REQ-008, REQ-009. 3/3 Playwright tests passing. Surfaced and fixed a login-time RLS bootstrap gap, see design.md's Deviations.
+- [x] T5.2 Wire logout (`signOut`) with a redirect to `/login`. Validation: `pnpm test:e2e -- logout`. Closes REQ-015. 1/1 Playwright test passing, wired through a real "Log out" button on `/` (see design.md's Deviations on why).
 
 ## T6: Workspace routes (REQ-014, REQ-017)
 

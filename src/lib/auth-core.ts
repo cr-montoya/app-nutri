@@ -1,4 +1,5 @@
 import type { JWT } from "next-auth/jwt";
+import type { Role } from "@prisma/client";
 import { verify } from "@node-rs/argon2";
 import { db } from "./db";
 
@@ -43,14 +44,10 @@ export async function authorizeCredentials(
     return null;
   }
 
-  const user = await db.user.findUnique({
-    where: { email },
-    include: { membership: true },
-  });
+  const user = await db.user.findUnique({ where: { email } });
 
-  // No user, or a user with no membership yet (shouldn't happen post T4.2,
-  // but defensive): same generic failure, no enumeration signal.
-  if (!user || !user.membership) {
+  // No user at all: same generic failure, no enumeration signal.
+  if (!user) {
     return null;
   }
 
@@ -59,11 +56,30 @@ export async function authorizeCredentials(
     return null;
   }
 
+  // `Membership` is RLS-protected (org-scoped), but at this point in login
+  // there is no tenant session yet to scope it by -- finding out which
+  // org this user belongs to is the whole point of this query. A regular
+  // `db.membership.findUnique`/`include` here would silently see zero rows
+  // (current_org_id unset) and fail every login. `get_membership_for_login`
+  // is a narrow SECURITY DEFINER function (migration
+  // 20260826054241_login_membership_lookup_function) built for exactly
+  // this bootstrap case, analogous to registerAction's `set_config` call
+  // on the write side.
+  const [membership] = await db.$queryRaw<{ organizationId: string; role: Role }[]>`
+    SELECT * FROM get_membership_for_login(${user.id})
+  `;
+
+  // A user with no membership yet (shouldn't happen post T4.2, but
+  // defensive): same generic failure, no enumeration signal.
+  if (!membership) {
+    return null;
+  }
+
   return {
     id: user.id,
     email: user.email,
     name: user.name,
-    organizationId: user.membership.organizationId,
+    organizationId: membership.organizationId,
     tokenVersion: user.tokenVersion,
   };
 }

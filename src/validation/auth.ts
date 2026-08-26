@@ -18,6 +18,20 @@ export const registerSchema = z.object({
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 
+/**
+ * Login validation (T5.1). Deliberately minimal: REQ-008/REQ-009 are about
+ * the *auth outcome*, not field format, and login must never reveal more
+ * than a wrong-password attempt would -- so this only checks presence, and
+ * a failed parse returns the exact same generic error as a failed
+ * `authorize()` call (src/server/actions/auth.ts's `loginAction`).
+ */
+export const loginSchema = z.object({
+  email: z.string().trim().min(1),
+  password: z.string().min(1),
+});
+
+export type LoginInput = z.infer<typeof loginSchema>;
+
 export class BreachedPasswordError extends Error {
   constructor(message = "This password has appeared in a data breach. Please choose a different one.") {
     super(message);
