@@ -29,7 +29,7 @@ Branch: `feat/phase-1a-team-invites`, created by `task-runner` from up-to-date `
   function -- there is no meaningful intermediate state where one exists
   without the other, so they were implemented together. Each task still has
   its own dedicated test file and both validation commands pass independently. -->
-- [ ] T3.5 Concurrency test: two simultaneous accept requests for the same invite/email, confirming exactly one succeeds and the loser gets the generic error, no duplicate `User`. Validation: `pnpm test -- accept-invite-race`. Closes REQ-011.
+- [x] T3.5 Concurrency test: two simultaneous accept requests for the same invite/email, confirming exactly one succeeds and the loser gets the generic error, no duplicate `User`. Validation: `pnpm test -- accept-invite-race`. Closes REQ-011.
 - [ ] T3.6 Concurrency test: a revoke and an accept racing on the same invite, confirming exactly one wins per REQ-012's rule. Validation: `pnpm test -- revoke-accept-race`. Closes REQ-012.
 - [ ] T3.7 Build `src/app/(auth)/invite/[token]/page.tsx`: the accept form, wired to `acceptInviteAction`, showing the invited email read-only and the generic error for any invalid-token case. Validation: `pnpm test:e2e -- accept-invite`.
 
