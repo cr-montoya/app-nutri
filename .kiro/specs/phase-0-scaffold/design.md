@@ -165,4 +165,5 @@ Everything is new; this phase has no prior code to reuse. It exists specifically
 
 ## Deviations
 
-None yet; this section is for `spec-closeout` to fill in if implementation diverges from this design.
+- **Prisma pinned to `6.19.3`, not the `latest`/`prev` dist-tag (`7.x`/`8.x`).** As of implementation, Prisma 7 made the classic `datasource { url = env("DATABASE_URL") }` schema syntax invalid, requiring a `prisma.config.ts` and a driver adapter (`@prisma/adapter-pg` or similar) passed explicitly to the `PrismaClient` constructor instead. That's a real architecture decision (which adapter, how it composes with the `withTenant`/`AsyncLocalStorage` pattern and Neon's serverless driver) that isn't in this design and wasn't debated. Rather than silently absorb it mid-task, this implementation stays on the latest Prisma 6.x (`6.19.3`), which keeps the schema-based `url = env(...)` datasource and plain `new PrismaClient()` this design assumes. Revisiting the Prisma 7 driver-adapter migration is a follow-up for its own spec/ADR, not something folded into Phase 0.
+

@@ -1,0 +1,71 @@
+// AppNutri database schema.
+// Phase 0 (phase-0-scaffold): Organization, User, Membership, Professional.
+// See .kiro/specs/phase-0-scaffold/design.md for the design rationale.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  NUTRITIONIST
+  FRONT_DESK
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  memberships Membership[]
+
+  @@map("organizations")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  tokenVersion Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  membership Membership?
+
+  @@map("users")
+}
+
+model Membership {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  organizationId String
+  role           Role
+  createdAt      DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  professional Professional?
+
+  @@index([organizationId])
+  @@map("memberships")
+}
+
+model Professional {
+  id             String  @id @default(cuid())
+  membershipId   String  @unique
+  organizationId String
+  licenseNumber  String?
+  specialty      String?
+  signatureUrl   String?
+
+  membership Membership @relation(fields: [membershipId], references: [id])
+
+  @@index([organizationId])
+  @@map("professionals")
+}
