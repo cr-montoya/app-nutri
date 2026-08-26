@@ -4,7 +4,7 @@ Branch: `feat/phase-0-scaffold`, created by `task-runner` from up-to-date `main`
 
 ## T1: Project scaffold
 
-- [ ] T1.1 Initialize the Next.js 15 project (TypeScript, App Router, Tailwind CSS v4) with `pnpm`. Validation: `pnpm build` succeeds on the empty scaffold.
+- [x] T1.1 Initialize the Next.js 15 project (TypeScript, App Router, Tailwind CSS v4) with `pnpm`. Validation: `pnpm build` succeeds on the empty scaffold.
 - [ ] T1.2 Install and configure shadcn/ui; add one primitive (`Button`) to confirm the setup. Validation: `pnpm build` succeeds with the primitive imported on a smoke page.
 - [ ] T1.3 Add Prisma, Auth.js v5, `@node-rs/argon2`, Zod, and React Hook Form as dependencies. Validation: `pnpm install` completes; only `pnpm-lock.yaml` exists, no `package-lock.json`/`yarn.lock` (`.agents/rules/pnpm-only.md`).
 
