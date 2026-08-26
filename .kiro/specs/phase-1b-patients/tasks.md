@@ -4,7 +4,7 @@ Branch: `feat/phase-1b-patients`, created by `task-runner` from up-to-date `main
 
 ## T1: Schema, RLS, and search index (REQ-006, REQ-019, REQ-020)
 
-- [ ] T1.1 Add `Patient`, `AuditLog`, and the `Sex` enum to `prisma/schema.prisma` per `design.md`, plus the `Organization.patients`, `Organization.auditLogs`, and `User.auditLogs` back-relations. Validation: `pnpm exec prisma validate`.
+- [x] T1.1 Add `Patient`, `AuditLog`, and the `Sex` enum to `prisma/schema.prisma` per `design.md`, plus the `Organization.patients`, `Organization.auditLogs`, and `User.auditLogs` back-relations. Validation: `pnpm exec prisma validate`.
 - [ ] T1.2 Run the migration against the dev Neon branch. Validation: `pnpm exec prisma migrate dev` succeeds.
 - [ ] T1.3 Add `CREATE EXTENSION IF NOT EXISTS pg_trgm` and the trigram index on `patients."fullName"` to the migration. Validation: manual `psql` check confirming the extension and index exist.
 - [ ] T1.4 Add the RLS policies for `patients` and `audit_logs` from `design.md` to the migration. Validation: manual `psql` check confirming RLS is enabled and both policies exist.
