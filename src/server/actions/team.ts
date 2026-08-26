@@ -5,11 +5,12 @@ import { hash } from "@node-rs/argon2";
 import { Prisma, type Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { db, withTenant } from "@/lib/db";
-import { ForbiddenError, requireRole } from "@/lib/rbac";
+import { ForbiddenError, getOwnMembership, requireRole } from "@/lib/rbac";
 import {
   sendInviteSchema,
   acceptInviteSchema,
   updateProfessionalProfileSchema,
+  GENERIC_INVALID_INVITE_ERROR,
 } from "@/validation/team";
 import { checkPasswordNotBreached, BreachedPasswordError } from "@/validation/auth";
 
@@ -33,10 +34,10 @@ class DuplicatePendingInviteError extends Error {}
  * Resolves the caller's session and their own Membership (for its `role` and
  * `id`), then applies `requireRole` for `allowedRoles`. Throws
  * `ForbiddenError` (no session, or a session whose role isn't allowed) so
- * callers only need one try/catch. Generalized from the invite-only
- * `requireAdminSession` (T2.2/T2.3) so T4.1's `updateProfessionalProfileAction`
- * -- which needs `["ADMIN", "NUTRITIONIST"]`, not `["ADMIN"]` -- can share the
- * same session+membership lookup instead of duplicating it.
+ * callers only need one try/catch. The Membership lookup itself is
+ * `getOwnMembership` (src/lib/rbac.ts), shared with `team/page.tsx` and
+ * `team/professional-profile/page.tsx`'s Server Components, which can't call
+ * this function directly since it lives in a `"use server"` module.
  */
 async function requireSession(allowedRoles: readonly Role[]) {
   const session = await auth();
@@ -44,20 +45,45 @@ async function requireSession(allowedRoles: readonly Role[]) {
     throw new ForbiddenError("No authenticated session.");
   }
 
-  const membership = await withTenant(
-    { organizationId: session.organizationId, userId: session.user.id },
-    (tx) => tx.membership.findUnique({ where: { userId: session.user.id } })
-  );
-
+  const membership = await getOwnMembership(session);
   const requiredMembership = requireRole(membership, allowedRoles);
 
   return { session, membership: requiredMembership };
 }
 
-/** `requireSession(["ADMIN"])`, kept as its own name for T2.2/T2.3's call sites. */
-async function requireAdminSession() {
-  const { session } = await requireSession(["ADMIN"]);
-  return session;
+type AuthorizedSession = Awaited<ReturnType<typeof requireSession>>["session"];
+type AuthorizedMembership = Awaited<ReturnType<typeof requireSession>>["membership"];
+
+interface AuthorizedActionResult {
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Wraps `requireSession(allowedRoles)` plus the `ForbiddenError` ->
+ * `GENERIC_FORBIDDEN_ERROR` mapping that was previously copy-pasted in
+ * `sendInviteAction`, `revokeInviteAction`, and
+ * `updateProfessionalProfileAction` (code-quality finding,
+ * phase-1a-team-invites remediation). `fn` only runs once authorization
+ * succeeds and receives the resolved session/membership; each action's own
+ * validation and DB work moved into `fn` unchanged.
+ */
+async function withAuthorizedSession<T extends AuthorizedActionResult>(
+  allowedRoles: readonly Role[],
+  fn: (session: AuthorizedSession, membership: AuthorizedMembership) => Promise<T>
+): Promise<T> {
+  let session: AuthorizedSession;
+  let membership: AuthorizedMembership;
+  try {
+    ({ session, membership } = await requireSession(allowedRoles));
+  } catch (error) {
+    if (error instanceof ForbiddenError) {
+      return { success: false, error: GENERIC_FORBIDDEN_ERROR } as T;
+    }
+    throw error;
+  }
+
+  return fn(session, membership);
 }
 
 export interface SendInviteActionResult {
@@ -74,65 +100,57 @@ export interface SendInviteActionResult {
  * the ADMIN shares `inviteUrl` manually.
  */
 export async function sendInviteAction(input: unknown): Promise<SendInviteActionResult> {
-  let session: Awaited<ReturnType<typeof requireAdminSession>>;
-  try {
-    session = await requireAdminSession();
-  } catch (error) {
-    if (error instanceof ForbiddenError) {
-      return { success: false, error: GENERIC_FORBIDDEN_ERROR };
+  return withAuthorizedSession(["ADMIN"], async (session) => {
+    const parsed = sendInviteSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, error: GENERIC_VALIDATION_ERROR };
     }
-    throw error;
-  }
+    const { email, role } = parsed.data;
 
-  const parsed = sendInviteSchema.safeParse(input);
-  if (!parsed.success) {
-    return { success: false, error: GENERIC_VALIDATION_ERROR };
-  }
-  const { email, role } = parsed.data;
+    // REQ-003: global uniqueness check against User.email. User isn't
+    // tenant-scoped (src/lib/db.ts), so this is a direct query, no withTenant.
+    const existingUser = await db.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return { success: false, error: GENERIC_EMAIL_TAKEN_ERROR };
+    }
 
-  // REQ-003: global uniqueness check against User.email. User isn't
-  // tenant-scoped (src/lib/db.ts), so this is a direct query, no withTenant.
-  const existingUser = await db.user.findUnique({ where: { email } });
-  if (existingUser) {
-    return { success: false, error: GENERIC_EMAIL_TAKEN_ERROR };
-  }
+    const rawToken = randomBytes(32).toString("hex");
+    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+    const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS);
 
-  const rawToken = randomBytes(32).toString("hex");
-  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-  const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS);
+    try {
+      await withTenant(
+        { organizationId: session.organizationId, userId: session.user.id },
+        async (tx) => {
+          // REQ-004: derived-pending check (design.md: no `status` enum),
+          // scoped to this org + email, inside the same withTenant call since
+          // Invite is tenant-scoped.
+          const existingPending = await tx.invite.findFirst({
+            where: { email, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
+          });
+          if (existingPending) {
+            throw new DuplicatePendingInviteError();
+          }
 
-  try {
-    await withTenant(
-      { organizationId: session.organizationId, userId: session.user.id },
-      async (tx) => {
-        // REQ-004: derived-pending check (design.md: no `status` enum),
-        // scoped to this org + email, inside the same withTenant call since
-        // Invite is tenant-scoped.
-        const existingPending = await tx.invite.findFirst({
-          where: { email, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
-        });
-        if (existingPending) {
-          throw new DuplicatePendingInviteError();
+          // organizationId is a required scalar in Prisma's generated
+          // create-input type, so it must be supplied here even inside
+          // withTenant; the tenant-context extension (src/lib/db.ts) injects
+          // the real value regardless of what's passed, same as
+          // tests/integration/invite-rls-positive.test.ts.
+          await tx.invite.create({
+            data: { email, role, tokenHash, expiresAt, organizationId: session.organizationId },
+          });
         }
-
-        // organizationId is a required scalar in Prisma's generated
-        // create-input type, so it must be supplied here even inside
-        // withTenant; the tenant-context extension (src/lib/db.ts) injects
-        // the real value regardless of what's passed, same as
-        // tests/integration/invite-rls-positive.test.ts.
-        await tx.invite.create({
-          data: { email, role, tokenHash, expiresAt, organizationId: session.organizationId },
-        });
+      );
+    } catch (error) {
+      if (error instanceof DuplicatePendingInviteError) {
+        return { success: false, error: GENERIC_DUPLICATE_INVITE_ERROR };
       }
-    );
-  } catch (error) {
-    if (error instanceof DuplicatePendingInviteError) {
-      return { success: false, error: GENERIC_DUPLICATE_INVITE_ERROR };
+      throw error;
     }
-    throw error;
-  }
 
-  return { success: true, inviteUrl: `/invite/${rawToken}` };
+    return { success: true, inviteUrl: `/invite/${rawToken}` };
+  });
 }
 
 export interface RevokeInviteActionResult {
@@ -152,32 +170,24 @@ export interface RevokeInviteActionResult {
  * them would leak which case it was to the caller.
  */
 export async function revokeInviteAction(inviteId: string): Promise<RevokeInviteActionResult> {
-  let session: Awaited<ReturnType<typeof requireAdminSession>>;
-  try {
-    session = await requireAdminSession();
-  } catch (error) {
-    if (error instanceof ForbiddenError) {
-      return { success: false, error: GENERIC_FORBIDDEN_ERROR };
+  return withAuthorizedSession(["ADMIN"], async (session) => {
+    const { count } = await withTenant(
+      { organizationId: session.organizationId, userId: session.user.id },
+      (tx) =>
+        // organizationId is injected by the tenant-context extension
+        // (src/lib/db.ts's applyTenantScope), never added manually here.
+        tx.invite.updateMany({
+          where: { id: inviteId, acceptedAt: null, revokedAt: null },
+          data: { revokedAt: new Date() },
+        })
+    );
+
+    if (count === 0) {
+      return { success: false, error: "This invite can no longer be revoked." };
     }
-    throw error;
-  }
 
-  const { count } = await withTenant(
-    { organizationId: session.organizationId, userId: session.user.id },
-    (tx) =>
-      // organizationId is injected by the tenant-context extension
-      // (src/lib/db.ts's applyTenantScope), never added manually here.
-      tx.invite.updateMany({
-        where: { id: inviteId, acceptedAt: null, revokedAt: null },
-        data: { revokedAt: new Date() },
-      })
-  );
-
-  if (count === 0) {
-    return { success: false, error: "This invite can no longer be revoked." };
-  }
-
-  return { success: true };
+    return { success: true };
+  });
 }
 
 /**
@@ -220,13 +230,13 @@ function isInvitePending(
   return invite.acceptedAt === null && invite.revokedAt === null && invite.expiresAt > now;
 }
 
-// Not exported: a "use server" module may only export async functions
-// (Next.js's Server Actions build transform rejects any other export --
-// discovered here when exporting this as a plain string constant broke
-// every export from this file at build time). src/app/(auth)/invite/[token]/
-// page.tsx duplicates this exact string for its own "invalid invite" render
-// instead of importing it; see the comment there.
-const GENERIC_INVALID_INVITE_ERROR = "This invite link is invalid or has expired.";
+// GENERIC_INVALID_INVITE_ERROR now lives in src/validation/team.ts (imported
+// above), not here: a "use server" module may only export async functions
+// (Next.js's Server Actions build transform rejects any other export), so it
+// couldn't be exported from this file for src/app/(auth)/invite/[token]/
+// page.tsx to import directly -- that's why it was hand-duplicated there
+// before this refactor (code-quality finding, phase-1a-team-invites
+// remediation).
 
 /**
  * Looks up an `Invite` by its raw (unhashed) URL token, *before* any
@@ -442,49 +452,40 @@ const GENERIC_PROFILE_VALIDATION_ERROR = "Please check your profile details and 
 export async function updateProfessionalProfileAction(
   input: unknown
 ): Promise<UpdateProfessionalProfileActionResult> {
-  let session: Awaited<ReturnType<typeof requireSession>>["session"];
-  let membership: Awaited<ReturnType<typeof requireSession>>["membership"];
-  try {
-    ({ session, membership } = await requireSession(["ADMIN", "NUTRITIONIST"]));
-  } catch (error) {
-    if (error instanceof ForbiddenError) {
-      return { success: false, error: GENERIC_FORBIDDEN_ERROR };
+  return withAuthorizedSession(["ADMIN", "NUTRITIONIST"], async (session, membership) => {
+    const parsed = updateProfessionalProfileSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, error: GENERIC_PROFILE_VALIDATION_ERROR };
     }
-    throw error;
-  }
+    // updateProfessionalProfileSchema (src/validation/team.ts) deliberately
+    // has no `.transform()` for typing reasons documented there; normalize
+    // an empty submitted string to `undefined` here instead, so a cleared
+    // field is stored as null rather than "".
+    const licenseNumber = parsed.data.licenseNumber || undefined;
+    const specialty = parsed.data.specialty || undefined;
 
-  const parsed = updateProfessionalProfileSchema.safeParse(input);
-  if (!parsed.success) {
-    return { success: false, error: GENERIC_PROFILE_VALIDATION_ERROR };
-  }
-  // updateProfessionalProfileSchema (src/validation/team.ts) deliberately has
-  // no `.transform()` for typing reasons documented there; normalize an
-  // empty submitted string to `undefined` here instead, so a cleared field
-  // is stored as null rather than "".
-  const licenseNumber = parsed.data.licenseNumber || undefined;
-  const specialty = parsed.data.specialty || undefined;
+    await withTenant(
+      { organizationId: session.organizationId, userId: session.user.id },
+      (tx) =>
+        // organizationId is a required scalar in Prisma's generated
+        // upsert-create-input type (same reason sendInviteAction's
+        // tx.invite.create above supplies it explicitly), so it must be
+        // passed here even inside withTenant; applyTenantScope
+        // (src/lib/db.ts) injects the real value into `create` regardless
+        // of what's passed, and strips any organizationId from `update` so
+        // this can never move a row to a different organization.
+        tx.professional.upsert({
+          where: { membershipId: membership.id },
+          create: {
+            membershipId: membership.id,
+            organizationId: session.organizationId,
+            licenseNumber,
+            specialty,
+          },
+          update: { licenseNumber, specialty },
+        })
+    );
 
-  await withTenant(
-    { organizationId: session.organizationId, userId: session.user.id },
-    (tx) =>
-      // organizationId is a required scalar in Prisma's generated
-      // upsert-create-input type (same reason sendInviteAction's
-      // tx.invite.create above supplies it explicitly), so it must be
-      // passed here even inside withTenant; applyTenantScope (src/lib/db.ts)
-      // injects the real value into `create` regardless of what's passed,
-      // and strips any organizationId from `update` so this can never move
-      // a row to a different organization.
-      tx.professional.upsert({
-        where: { membershipId: membership.id },
-        create: {
-          membershipId: membership.id,
-          organizationId: session.organizationId,
-          licenseNumber,
-          specialty,
-        },
-        update: { licenseNumber, specialty },
-      })
-  );
-
-  return { success: true };
+    return { success: true };
+  });
 }

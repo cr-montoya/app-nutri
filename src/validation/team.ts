@@ -52,3 +52,18 @@ export const updateProfessionalProfileSchema = z.object({
 });
 
 export type UpdateProfessionalProfileInput = z.infer<typeof updateProfessionalProfileSchema>;
+
+/**
+ * REQ-013's exact generic wording for an invalid, expired, revoked, or
+ * already-accepted invite token. Shared by `src/server/actions/team.ts`
+ * (`acceptInviteAction`/`findPendingInviteByToken`) and
+ * `src/app/(auth)/invite/[token]/page.tsx`'s "invalid invite" render.
+ * Lives here, not in `team.ts`, because a `"use server"` module may only
+ * export async functions (discovered when this was first attempted as a
+ * plain exported string there), so it can't be imported by the Server
+ * Component page directly; this plain module has no such restriction
+ * (code-quality finding, phase-1a-team-invites remediation: this replaced a
+ * hand-duplicated copy of the same string with a "keep these in sync"
+ * comment).
+ */
+export const GENERIC_INVALID_INVITE_ERROR = "This invite link is invalid or has expired.";

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
-import { ForbiddenError, requireRole } from "@/lib/rbac";
+import { ForbiddenError, getOwnMembership, requireRole } from "@/lib/rbac";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProfessionalProfileForm } from "./professional-profile-form";
 
@@ -26,10 +26,7 @@ export default async function ProfessionalProfilePage() {
     notFound();
   }
 
-  const membership = await withTenant(
-    { organizationId: session.organizationId, userId: session.user.id },
-    (tx) => tx.membership.findUnique({ where: { userId: session.user.id } })
-  );
+  const membership = await getOwnMembership(session);
 
   let requiredMembership: NonNullable<typeof membership>;
   try {

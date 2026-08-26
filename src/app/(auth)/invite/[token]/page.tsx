@@ -1,14 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { lookupInviteByToken } from "@/server/actions/team";
+import { GENERIC_INVALID_INVITE_ERROR } from "@/validation/team";
 import { AcceptInviteForm } from "./accept-invite-form";
-
-// Duplicated from src/server/actions/team.ts's (unexported)
-// GENERIC_INVALID_INVITE_ERROR: a "use server" module may only export async
-// functions, so that constant can't be imported directly here. Keep this
-// string in sync with the one in team.ts's acceptInviteAction/
-// findPendingInviteByToken if either changes -- both are REQ-013's exact
-// generic wording.
-const GENERIC_INVALID_INVITE_ERROR = "This invite link is invalid or has expired.";
 
 /**
  * T3.7. Public route (src/middleware.ts allowlists `/invite/*`), same
