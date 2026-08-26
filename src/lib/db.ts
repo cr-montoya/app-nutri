@@ -7,7 +7,7 @@ import { PrismaClient } from "@prisma/client";
  * Primary layer of the two-layer multi-tenant isolation model
  * (.kiro/steering/structure.md, plan.md §3). Postgres Row-Level Security
  * is the defense-in-depth second layer (prisma/migrations, RLS policies on
- * `memberships` and `professionals`).
+ * `memberships`, `professionals`, and `invites`).
  *
  * Every read/write on a tenant-scoped model must go through `withTenant`;
  * see .agents/rules/tenant-isolation.md. Querying a tenant-scoped model
@@ -25,7 +25,7 @@ export interface TenantContext {
  * excluded: a `User` is a global login identity looked up by email before
  * any org context exists, and an `Organization` is the tenant itself.
  */
-const TENANT_SCOPED_MODELS = new Set(["Membership", "Professional"]);
+const TENANT_SCOPED_MODELS = new Set(["Membership", "Professional", "Invite"]);
 
 const tenantStorage = new AsyncLocalStorage<TenantContext>();
 
