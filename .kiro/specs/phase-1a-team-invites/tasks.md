@@ -4,12 +4,12 @@ Branch: `feat/phase-1a-team-invites`, created by `task-runner` from up-to-date `
 
 ## T1: Schema and RLS (REQ-020, REQ-021)
 
-- [ ] T1.1 Add the `Invite` model to `prisma/schema.prisma` per `design.md` (reusing the existing `Role` enum), plus the `Organization.invites` back-relation. Validation: `pnpm exec prisma validate`.
-- [ ] T1.2 Run the migration against the dev Neon branch. Validation: `pnpm exec prisma migrate dev` succeeds.
-- [ ] T1.3 Add the dual-branch RLS policy from `design.md`/ADR-0002 to the migration. Validation: manual `psql` check confirming RLS is enabled and the policy exists with both branches.
-- [ ] T1.4 Positive RLS test: an ADMIN session lists its own org's `Invite`s. Validation: `pnpm test -- invite-rls-positive`. Closes REQ-021 (app-layer half).
-- [ ] T1.5 Negative RLS test: a raw `pg` client scoped to org A gets zero rows querying org B's `Invite`s directly. Validation: `pnpm test -- invite-rls-negative`. Closes REQ-021 (db-layer half).
-- [ ] T1.6 Token-scoped RLS test: with `app.invite_lookup_token_hash` set to a specific invite's hash and `app.current_org_id` unset, exactly that one row is visible; a random 64-hex-char hash returns zero rows. Validation: `pnpm test -- invite-token-lookup-rls`. Closes REQ-006, REQ-020.
+- [x] T1.1 Add the `Invite` model to `prisma/schema.prisma` per `design.md` (reusing the existing `Role` enum), plus the `Organization.invites` back-relation. Validation: `pnpm exec prisma validate`.
+- [x] T1.2 Run the migration against the dev Neon branch. Validation: `pnpm exec prisma migrate dev` succeeds.
+- [x] T1.3 Add the dual-branch RLS policy from `design.md`/ADR-0002 to the migration. Validation: manual `psql` check confirming RLS is enabled and the policy exists with both branches.
+- [x] T1.4 Positive RLS test: an ADMIN session lists its own org's `Invite`s. Validation: `pnpm test -- invite-rls-positive`. Closes REQ-021 (app-layer half).
+- [x] T1.5 Negative RLS test: a raw `pg` client scoped to org A gets zero rows querying org B's `Invite`s directly. Validation: `pnpm test -- invite-rls-negative`. Closes REQ-021 (db-layer half).
+- [x] T1.6 Token-scoped RLS test: with `app.invite_lookup_token_hash` set to a specific invite's hash and `app.current_org_id` unset, exactly that one row is visible; a random 64-hex-char hash returns zero rows. Validation: `pnpm test -- invite-token-lookup-rls`. Closes REQ-006, REQ-020.
 
 ## T2: Sending, revoking, and listing invites (REQ-001 through REQ-005, REQ-014 through REQ-016)
 
