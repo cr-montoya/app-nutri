@@ -109,3 +109,83 @@ export async function createPatientAction(input: unknown): Promise<CreatePatient
     throw error;
   }
 }
+
+export interface UpdatePatientActionResult {
+  success: boolean;
+  error?: string;
+}
+
+const GENERIC_NOT_FOUND_ERROR = "Patient not found.";
+
+/**
+ * T3.4, closes REQ-012, REQ-021. Reuses `patientSchema` unchanged (REQ-012:
+ * "the same validations as creation"); a failed `safeParse` returns before
+ * any query runs, leaving the existing row untouched. This is a full-record
+ * edit (the form resubmits every field), so an optional field left blank
+ * explicitly clears the stored value (`?? null`) rather than silently
+ * leaving a stale value in place -- unlike `createPatientAction`, where
+ * `undefined` on a brand-new row and `null` are equivalent.
+ *
+ * `tx.patient.update({ where: { id: patientId }, ... })` doesn't add
+ * `organizationId` to `where` manually: the tenant-context extension
+ * (src/lib/db.ts's `applyTenantScope`) injects it for every `update` call,
+ * so a `patientId` belonging to a different organization simply matches no
+ * row and Prisma throws P2025, mapped below to the same generic
+ * "not found" a nonexistent id would get -- never a hint that the id
+ * belongs to someone else's organization (REQ-019).
+ */
+export async function updatePatientAction(
+  patientId: string,
+  input: unknown
+): Promise<UpdatePatientActionResult> {
+  const session = await auth();
+  if (!session) {
+    return { success: false, error: GENERIC_FORBIDDEN_ERROR };
+  }
+
+  const parsed = patientSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: GENERIC_PATIENT_VALIDATION_ERROR };
+  }
+  const data = parsed.data;
+  const ipAddress = await resolveIpAddress();
+
+  try {
+    await withTenant(
+      { organizationId: session.organizationId, userId: session.user.id },
+      async (tx) => {
+        const updated = await tx.patient.update({
+          where: { id: patientId },
+          data: {
+            fullName: data.fullName,
+            phone: data.phone,
+            documentId: data.documentId ?? null,
+            birthDate: data.birthDate ?? null,
+            sex: data.sex ?? null,
+            email: data.email ?? null,
+            address: data.address || null,
+          },
+        });
+
+        await logAudit(tx, {
+          action: "patient.update",
+          entityType: "Patient",
+          entityId: updated.id,
+          userId: session.user.id,
+          organizationId: session.organizationId,
+          ipAddress,
+        });
+      }
+    );
+
+    return { success: true };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return { success: false, error: GENERIC_DUPLICATE_DOCUMENT_ID_ERROR };
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return { success: false, error: GENERIC_NOT_FOUND_ERROR };
+    }
+    throw error;
+  }
+}
