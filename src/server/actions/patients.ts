@@ -189,3 +189,63 @@ export async function updatePatientAction(
     throw error;
   }
 }
+
+export interface ArchivePatientActionResult {
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * T3.5, closes REQ-013, REQ-014, REQ-021. `archivePatientAction`/
+ * `unarchivePatientAction` are thin wrappers around the same helper, one
+ * setting `archivedAt`, the other clearing it -- both call `logAudit()` on
+ * success with a distinct action name (REQ-021 requires the action be
+ * named). Same wrong-organization handling as `updatePatientAction`: the
+ * tenant-context extension injects `organizationId` into `where`, so a
+ * foreign `patientId` throws P2025, mapped to the same generic
+ * "not found".
+ */
+async function setPatientArchivedState(
+  patientId: string,
+  archivedAt: Date | null,
+  action: "patient.archive" | "patient.unarchive"
+): Promise<ArchivePatientActionResult> {
+  const session = await auth();
+  if (!session) {
+    return { success: false, error: GENERIC_FORBIDDEN_ERROR };
+  }
+  const ipAddress = await resolveIpAddress();
+
+  try {
+    await withTenant(
+      { organizationId: session.organizationId, userId: session.user.id },
+      async (tx) => {
+        const updated = await tx.patient.update({ where: { id: patientId }, data: { archivedAt } });
+
+        await logAudit(tx, {
+          action,
+          entityType: "Patient",
+          entityId: updated.id,
+          userId: session.user.id,
+          organizationId: session.organizationId,
+          ipAddress,
+        });
+      }
+    );
+
+    return { success: true };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return { success: false, error: GENERIC_NOT_FOUND_ERROR };
+    }
+    throw error;
+  }
+}
+
+export async function archivePatientAction(patientId: string): Promise<ArchivePatientActionResult> {
+  return setPatientArchivedState(patientId, new Date(), "patient.archive");
+}
+
+export async function unarchivePatientAction(patientId: string): Promise<ArchivePatientActionResult> {
+  return setPatientArchivedState(patientId, null, "patient.unarchive");
+}

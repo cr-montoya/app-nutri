@@ -21,7 +21,7 @@ Branch: `feat/phase-1b-patients`, created by `task-runner` from up-to-date `main
 - [x] T3.2 Implement `createPatientAction` in `src/server/actions/patients.ts`: validates via the schema above, catches the `documentId` unique-constraint violation with the generic error, calls `logAudit()` on success. Validation: `pnpm test -- create-patient`. Closes REQ-001, REQ-005, REQ-006, REQ-021.
 - [x] T3.3 Concurrency test: two simultaneous creates with the same organization and document ID, confirming exactly one succeeds. Validation: `pnpm test -- create-patient-race`. Closes REQ-007.
 - [x] T3.4 Implement `updatePatientAction`: reuses the same Zod schema, rejects and leaves the record unchanged on any validation failure, calls `logAudit()` on success. Validation: `pnpm test -- update-patient`. Closes REQ-012, REQ-021.
-- [ ] T3.5 Implement `archivePatientAction` and `unarchivePatientAction`: set/clear `archivedAt`, call `logAudit()` on success. Validation: `pnpm test -- archive-patient`. Closes REQ-013, REQ-014, REQ-021.
+- [x] T3.5 Implement `archivePatientAction` and `unarchivePatientAction`: set/clear `archivedAt`, call `logAudit()` on success. Validation: `pnpm test -- archive-patient`. Closes REQ-013, REQ-014, REQ-021.
 
 ## T4: List, search, and detail view (REQ-015 through REQ-018, REQ-022, REQ-023)
 
