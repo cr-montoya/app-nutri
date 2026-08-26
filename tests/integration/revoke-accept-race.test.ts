@@ -27,7 +27,7 @@ let emailCounter = 0;
 
 function uniqueEmail(label: string) {
   emailCounter += 1;
-  const email = `revoke-accept-race-${runId}-${emailCounter}@example.test`;
+  const email = `revoke-accept-race-${label}-${runId}-${emailCounter}@example.test`;
   createdEmails.push(email);
   return email;
 }
