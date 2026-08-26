@@ -25,7 +25,7 @@ Branch: `feat/phase-1b-patients`, created by `task-runner` from up-to-date `main
 
 ## T4: List, search, and detail view (REQ-015 through REQ-018, REQ-022, REQ-023)
 
-- [ ] T4.1 Implement the patient list query (default excludes archived, `?archived=true` includes both, `?q=` searches name/document) in a data-access function used by the list page. Validation: `pnpm test -- patient-list-query`. Closes REQ-015, REQ-016, REQ-017.
+- [x] T4.1 Implement the patient list query (default excludes archived, `?archived=true` includes both, `?q=` searches name/document) in a data-access function used by the list page. Validation: `pnpm test -- patient-list-query`. Closes REQ-015, REQ-016, REQ-017.
 - [ ] T4.2 Build `src/app/(app)/[orgSlug]/patients/page.tsx`: shell (search box, new-patient button, archived toggle) rendering immediately, list in a `<Suspense>` boundary with a skeleton fallback. Validation: `pnpm test:e2e -- patient-list`.
 - [ ] T4.3 Build `src/app/(app)/[orgSlug]/patients/new/page.tsx` and its form, wired to `createPatientAction`. Validation: `pnpm test:e2e -- create-patient`.
 - [ ] T4.4 Build `src/app/(app)/[orgSlug]/patients/[patientId]/page.tsx`: displays all fields, calls `logAudit()` for the view. Validation: `pnpm test:e2e -- patient-detail`. Closes REQ-018, REQ-022.
