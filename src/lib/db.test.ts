@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyTenantScope } from "./db";
+import { applyTenantScope, resolveRuntimeDatabaseUrl } from "./db";
 
 // Two fake org ids, deliberately not real cuids, to prove the injection
 // logic itself (not any particular seeded row) scopes correctly.
@@ -78,5 +78,38 @@ describe("applyTenantScope", () => {
     const args = applyTenantScope("aggregate", { _count: true }, ORG_A);
     expect(args.where).toEqual({ organizationId: ORG_A });
     expect(args._count).toBe(true);
+  });
+});
+
+describe("resolveRuntimeDatabaseUrl", () => {
+  it("uses Neon's dynamic DATABASE_URL in a Vercel environment", () => {
+    expect(
+      resolveRuntimeDatabaseUrl({
+        VERCEL_ENV: "preview",
+        DATABASE_URL: "postgresql://preview-app-role",
+        APP_DATABASE_URL: "postgresql://local-app-role",
+      })
+    ).toBe("postgresql://preview-app-role");
+  });
+
+  it("uses APP_DATABASE_URL outside Vercel even when DATABASE_URL is present", () => {
+    expect(
+      resolveRuntimeDatabaseUrl({
+        DATABASE_URL: "postgresql://local-migration-owner",
+        APP_DATABASE_URL: "postgresql://local-app-role",
+      })
+    ).toBe("postgresql://local-app-role");
+  });
+
+  it("fails closed when Vercel has no Neon runtime connection", () => {
+    expect(() => resolveRuntimeDatabaseUrl({ VERCEL_ENV: "preview" })).toThrow(
+      "DATABASE_URL is not set"
+    );
+  });
+
+  it("fails closed when local runtime has no restricted connection", () => {
+    expect(() => resolveRuntimeDatabaseUrl({ DATABASE_URL: "postgresql://owner" })).toThrow(
+      "APP_DATABASE_URL is not set"
+    );
   });
 });

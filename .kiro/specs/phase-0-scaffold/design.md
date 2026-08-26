@@ -4,7 +4,24 @@
 
 This is the first spec to touch the Prisma schema, so nothing existing is reused; instead this design establishes the exact patterns (`withTenant`, RLS policy shape, Server Action structure, route layout) that every later phase reuses without re-deciding. Layers touched, per `.kiro/steering/structure.md`: `prisma/schema.prisma`, `src/lib/db.ts`, `src/lib/auth.ts`, `src/server/actions/`, `src/middleware.ts`, `src/app/`.
 
-Specialist personas applied: `database-architect.md` (schema and RLS below) and `nextjs-architect.md` (routing below).
+Specialist personas applied: `database-architect.md` (schema and RLS below), `nextjs-architect.md` (routing below), and `security.md` (the deployed database-connection contract below).
+
+## Neon-Vercel runtime connection contract (REQ-022 through REQ-024)
+
+The Neon Vercel integration creates a separate database branch for each Preview deployment and supplies its pooled, branch-specific connection string as `DATABASE_URL`. The integration is configured in Neon to use `appnutri_app`, the non-owner, non-`BYPASSRLS` role created by the Phase 0 migration. Vercel exposes `VERCEL_ENV`, so the runtime can distinguish this trusted deployment environment from local tooling.
+
+`src/lib/db.ts` will resolve its runtime URL as follows:
+
+| Environment | Runtime connection | Reason |
+|---|---|---|
+| Vercel Preview / Production (`VERCEL_ENV` set) | `DATABASE_URL` | Neon updates it to the isolated branch URL for the selected restricted role. |
+| Local / tests (`VERCEL_ENV` unset) | `APP_DATABASE_URL` | Keeps the migration-owner `DATABASE_URL` unavailable to the local application runtime. |
+
+Both paths fail closed when their required variable is absent. There is no fallback from local `APP_DATABASE_URL` to `DATABASE_URL`, and no owner connection is configured in Vercel. `DATABASE_URL_UNPOOLED` remains managed by Neon but is not consumed by the application; Prisma 6 supports Neon's pooled URL for runtime queries.
+
+No Prisma schema, migration, tenant policy, RBAC rule, or UI changes are required. The security persona's review requires a live preview check using `SELECT current_user` with the deployed branch URL or Neon/Vercel integration metadata, confirming the configured role is `appnutri_app`, followed by an HTTP request to `/register`.
+
+This is the decision recorded in ADR-0003.
 
 ## Schema (database-architect)
 
@@ -136,6 +153,9 @@ Request → middleware.ts (auth() checks session exists) →
 | REQ-019 | Vercel project connected to the GitHub repo with Neon's Vercel integration for per-PR branching; a configuration task, not application code |
 | REQ-020 | `Membership.userId @unique` in the schema above |
 | REQ-021 | Zod length validation on the name field in `src/validation/auth.ts`, same file/pattern as REQ-006's org-name check |
+| REQ-022 | Runtime URL resolver in `src/lib/db.ts`, selecting the Vercel-provided Neon URL only when `VERCEL_ENV` is present |
+| REQ-023 | Neon integration configured for `appnutri_app`; deployment validation confirms the restricted current user, never an owner connection |
+| REQ-024 | A redeployed PR preview uses the dynamic Neon URL and serves `/register` |
 
 ## Files to create or update
 
@@ -143,6 +163,7 @@ Request → middleware.ts (auth() checks session exists) →
 prisma/schema.prisma                          # new: Organization, User, Membership, Professional, Role
 prisma/migrations/.../migration.sql            # generated; includes the RLS statements above, added manually after prisma migrate dev
 src/lib/db.ts                                  # new: Prisma Client Extension, withTenant
+src/lib/db.test.ts                             # update: unit coverage for local versus Vercel runtime URL resolution
 src/lib/auth.ts                                # new: Auth.js v5 config, Credentials provider, jwt()/session() callbacks
 src/lib/rbac.ts                                # new: requireRole stub
 src/server/actions/auth.ts                     # new: registerAction
@@ -179,4 +200,3 @@ Everything is new; this phase has no prior code to reuse. It exists specifically
 - **`registerAction` (`src/server/actions/auth.ts`) calls `set_config('app.current_org_id', ...)` manually inside its transaction, right after creating the `Organization` and before creating the `Membership`.** The RLS policy on `memberships` has no separate `WITH CHECK`, so Postgres uses its `USING` clause for INSERT too (design.md's "RLS policy" section); without this, RLS itself -- not the Prisma extension -- rejects the bootstrap `Membership` insert, because nothing has set `app.current_org_id` yet in a transaction that never calls `withTenant`. This was caught by `tests/integration/register-action.test.ts` actually running against Postgres, not by the Prisma-layer bootstrap exception alone. It's the bootstrap case's equivalent of what `withTenant` does automatically.
 - **`withTenant`'s guard makes a documented exception for `create`/`createMany` on a tenant-scoped model.** Every other operation (read, update, delete) on `Membership`/`Professional` throws if called outside `withTenant`. `create`/`createMany` are allowed outside it *only* if `organizationId` is already present in the payload (TypeScript already requires this, since it's a non-optional scalar in the generated Prisma create-input type), because REQ-001 requires `registerAction` (T4.2) to create a brand-new organization's very first `User` + `Organization` + `Membership` atomically in one `db.$transaction`, before any tenant session exists to derive a `withTenant` context from. Inside `withTenant`, the extension still always overwrites `organizationId` with the context's value regardless of what a caller passes in `data`, so this exception never lets a caller's `organizationId` value survive when a real tenant context is active; see `src/lib/db.ts` and the "prove the override" comment in `tests/integration/rls-positive.test.ts`.
 - **Prisma pinned to `6.19.3`, not the `latest`/`prev` dist-tag (`7.x`/`8.x`).** As of implementation, Prisma 7 made the classic `datasource { url = env("DATABASE_URL") }` schema syntax invalid, requiring a `prisma.config.ts` and a driver adapter (`@prisma/adapter-pg` or similar) passed explicitly to the `PrismaClient` constructor instead. That's a real architecture decision (which adapter, how it composes with the `withTenant`/`AsyncLocalStorage` pattern and Neon's serverless driver) that isn't in this design and wasn't debated. Rather than silently absorb it mid-task, this implementation stays on the latest Prisma 6.x (`6.19.3`), which keeps the schema-based `url = env(...)` datasource and plain `new PrismaClient()` this design assumes. Revisiting the Prisma 7 driver-adapter migration is a follow-up for its own spec/ADR, not something folded into Phase 0.
-

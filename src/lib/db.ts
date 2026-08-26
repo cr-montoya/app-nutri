@@ -107,20 +107,31 @@ export function applyTenantScope(
   return nextArgs;
 }
 
-function createBaseClient() {
-  // No fallback to DATABASE_URL: that's the table-owning migration role,
-  // which bypasses RLS entirely (superuser locally; whatever Neon's
-  // default branch role turns out to be in production -- see
-  // .env.example). Silently running the app against it would quietly
-  // disable the whole RLS defense-in-depth layer instead of failing loudly
-  // on a misconfigured environment.
-  const url = process.env.APP_DATABASE_URL;
+export interface RuntimeDatabaseEnvironment {
+  VERCEL_ENV?: string;
+  DATABASE_URL?: string;
+  APP_DATABASE_URL?: string;
+}
+
+export function resolveRuntimeDatabaseUrl(
+  environment: RuntimeDatabaseEnvironment = process.env as RuntimeDatabaseEnvironment
+): string {
+  // Neon supplies DATABASE_URL dynamically for Vercel Preview and Production
+  // deployments. Locally it remains the migration-owner URL, so runtime code
+  // must keep using the least-privilege APP_DATABASE_URL instead.
+  const variableName = environment.VERCEL_ENV ? "DATABASE_URL" : "APP_DATABASE_URL";
+  const url = environment[variableName];
   if (!url) {
     throw new Error(
-      "APP_DATABASE_URL is not set. The app must connect with a non-superuser, " +
+      `${variableName} is not set. The app must connect with a non-superuser, ` +
         "non-owner role so Postgres RLS actually applies -- see .env.example."
     );
   }
+  return url;
+}
+
+function createBaseClient() {
+  const url = resolveRuntimeDatabaseUrl();
   return new PrismaClient({ datasourceUrl: url });
 }
 
