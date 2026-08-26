@@ -26,15 +26,15 @@ Branch: `feat/phase-1b-patients`, created by `task-runner` from up-to-date `main
 ## T4: List, search, and detail view (REQ-015 through REQ-018, REQ-022, REQ-023)
 
 - [x] T4.1 Implement the patient list query (default excludes archived, `?archived=true` includes both, `?q=` searches name/document) in a data-access function used by the list page. Validation: `pnpm test -- patient-list-query`. Closes REQ-015, REQ-016, REQ-017.
-- [ ] T4.2 Build `src/app/(app)/[orgSlug]/patients/page.tsx`: shell (search box, new-patient button, archived toggle) rendering immediately, list in a `<Suspense>` boundary with a skeleton fallback. Validation: `pnpm test:e2e -- patient-list`.
-- [ ] T4.3 Build `src/app/(app)/[orgSlug]/patients/new/page.tsx` and its form, wired to `createPatientAction`. Validation: `pnpm test:e2e -- create-patient`.
-- [ ] T4.4 Build `src/app/(app)/[orgSlug]/patients/[patientId]/page.tsx`: displays all fields, calls `logAudit()` for the view. Validation: `pnpm test:e2e -- patient-detail`. Closes REQ-018, REQ-022.
-- [ ] T4.5 Build `src/app/(app)/[orgSlug]/patients/[patientId]/edit/page.tsx` and its form, wired to `updatePatientAction`, plus archive/unarchive buttons wired to their actions with `revalidatePath` on both the list and detail paths. Validation: `pnpm test:e2e -- edit-patient`.
-- [ ] T4.6 Confirm no `Patient` action in this spec calls `requireRole`; all three roles (`ADMIN`, `NUTRITIONIST`, `FRONT_DESK`) can complete every flow above. Validation: `pnpm test:e2e -- patient-rbac-open`. Closes REQ-023.
+- [x] T4.2 Build `src/app/(app)/[orgSlug]/patients/page.tsx`: shell (search box, new-patient button, archived toggle) rendering immediately, list in a `<Suspense>` boundary with a skeleton fallback. Validation: `pnpm test:e2e -- patient-list`.
+- [x] T4.3 Build `src/app/(app)/[orgSlug]/patients/new/page.tsx` and its form, wired to `createPatientAction`. Validation: `pnpm test:e2e -- create-patient`.
+- [x] T4.4 Build `src/app/(app)/[orgSlug]/patients/[patientId]/page.tsx`: displays all fields, calls `logAudit()` for the view. Validation: `pnpm test:e2e -- patient-detail`. Closes REQ-018, REQ-022.
+- [x] T4.5 Build `src/app/(app)/[orgSlug]/patients/[patientId]/edit/page.tsx` and its form, wired to `updatePatientAction`, plus archive/unarchive buttons wired to their actions with `revalidatePath` on both the list and detail paths. Validation: `pnpm test:e2e -- edit-patient`.
+- [x] T4.6 Confirm no `Patient` action in this spec calls `requireRole`; all three roles (`ADMIN`, `NUTRITIONIST`, `FRONT_DESK`) can complete every flow above. Validation: `pnpm test:e2e -- patient-rbac-open`. Closes REQ-023.
 
 ## T5: End-to-end proof
 
-- [ ] T5.1 Playwright E2E: as a `FRONT_DESK` member, create a patient, search for them by partial name and by exact document ID, view their profile, edit a field, archive them, confirm they disappear from the default list and appear with the archived filter, unarchive them. Validation: `pnpm test:e2e -- patients-e2e`. Confirms REQ-001 through REQ-023 hold end to end for the least-privileged role.
+- [x] T5.1 Playwright E2E: as a `FRONT_DESK` member, create a patient, search for them by partial name and by exact document ID, view their profile, edit a field, archive them, confirm they disappear from the default list and appear with the archived filter, unarchive them. Validation: `pnpm test:e2e -- patients-e2e`. Confirms REQ-001 through REQ-023 hold end to end for the least-privileged role.
 
 ## After T5.1
 
