@@ -26,7 +26,7 @@ Branch: `feat/phase-0-scaffold`, created by `task-runner` from up-to-date `main`
 ## T4: Registration (REQ-001 through REQ-007, REQ-020, REQ-021)
 
 - [x] T4.1 Write `src/validation/auth.ts`: Zod schemas for registration (email format, name 1 to 100 chars trimmed, password min 12 chars, org name 2 to 100 chars trimmed) and an async HIBP range-API check. Validation: `pnpm test -- validation`. Closes REQ-003, REQ-004, REQ-005, REQ-006, REQ-021. 15/15 tests passing (HIBP check tested with a mocked `fetch`, no live network call).
-- [ ] T4.2 Implement `src/server/actions/auth.ts`'s `registerAction`: a `db.$transaction` creating `User` (including `name`) + `Organization` + `Membership` atomically, the slug disambiguation loop (`-2`, `-3`, ...), and handling the `User.email` unique-constraint violation with the generic error from REQ-002. Validation: `pnpm test -- register-action`. Closes REQ-001, REQ-002, REQ-007, REQ-020.
+- [x] T4.2 Implement `src/server/actions/auth.ts`'s `registerAction`: a `db.$transaction` creating `User` (including `name`) + `Organization` + `Membership` atomically, the slug disambiguation loop (`-2`, `-3`, ...), and handling the `User.email` unique-constraint violation with the generic error from REQ-002. Validation: `pnpm test -- register-action`. Closes REQ-001, REQ-002, REQ-007, REQ-020. 4/4 tests passing against the real local Postgres. See design.md's Deviations for the RLS bootstrap fix this surfaced.
 - [ ] T4.3 Build `src/app/(auth)/register/page.tsx` and its form component, wired to `registerAction`. Validation: `pnpm test:e2e -- register`.
 
 ## T5: Login and session (REQ-008, REQ-009, REQ-015)
