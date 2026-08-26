@@ -31,7 +31,11 @@ Branch: `feat/phase-1a-team-invites`, created by `task-runner` from up-to-date `
   its own dedicated test file and both validation commands pass independently. -->
 - [x] T3.5 Concurrency test: two simultaneous accept requests for the same invite/email, confirming exactly one succeeds and the loser gets the generic error, no duplicate `User`. Validation: `pnpm test -- accept-invite-race`. Closes REQ-011.
 - [x] T3.6 Concurrency test: a revoke and an accept racing on the same invite, confirming exactly one wins per REQ-012's rule. Validation: `pnpm test -- revoke-accept-race`. Closes REQ-012.
-- [ ] T3.7 Build `src/app/(auth)/invite/[token]/page.tsx`: the accept form, wired to `acceptInviteAction`, showing the invited email read-only and the generic error for any invalid-token case. Validation: `pnpm test:e2e -- accept-invite`.
+- [x] T3.7 Build `src/app/(auth)/invite/[token]/page.tsx`: the accept form, wired to `acceptInviteAction`, showing the invited email read-only and the generic error for any invalid-token case. Validation: `pnpm test:e2e -- accept-invite`.
+  <!-- Includes a small, necessary fix to src/middleware.ts's PUBLIC_PATHS
+  check (adds a pathname.startsWith("/invite/") branch) -- without it this
+  route is unreachable for an unauthenticated visitor, same category as
+  T1's TENANT_SCOPED_MODELS fix, not scope creep. -->
 
 ## T4: Professional profiles (REQ-017 through REQ-019)
 

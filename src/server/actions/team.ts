@@ -206,7 +206,13 @@ function isInvitePending(
   return invite.acceptedAt === null && invite.revokedAt === null && invite.expiresAt > now;
 }
 
-export const GENERIC_INVALID_INVITE_ERROR = "This invite link is invalid or has expired.";
+// Not exported: a "use server" module may only export async functions
+// (Next.js's Server Actions build transform rejects any other export --
+// discovered here when exporting this as a plain string constant broke
+// every export from this file at build time). src/app/(auth)/invite/[token]/
+// page.tsx duplicates this exact string for its own "invalid invite" render
+// instead of importing it; see the comment there.
+const GENERIC_INVALID_INVITE_ERROR = "This invite link is invalid or has expired.";
 
 /**
  * Looks up an `Invite` by its raw (unhashed) URL token, *before* any
