@@ -41,11 +41,11 @@ Branch: `feat/phase-0-scaffold`, created by `task-runner` from up-to-date `main`
 
 ## T7: Deploy (REQ-019)
 
-- [ ] T7.1 Connect the Vercel project to the GitHub repo and configure the Neon Vercel integration for per-PR database branching. Validation: open a throwaway PR against `main` and confirm both a Vercel preview URL and a Neon branch are created. Closes REQ-019.
+- [BLOCKED] T7.1 Connect the Vercel project to the GitHub repo and configure the Neon Vercel integration for per-PR database branching. Validation: open a throwaway PR against `main` and confirm both a Vercel preview URL and a Neon branch are created. Closes REQ-019. **Reason**: requires Vercel CLI/account authentication and a Neon account/project, neither of which is available in this environment. No Vercel project exists to connect, and no Neon project exists to configure the integration against. Everything that doesn't require those live accounts (the Next.js app itself, the Prisma schema and migrations, all Server Actions and routes) is implemented and tested against a local Postgres standing in for Neon. **Unblocks with**: the user creates a Vercel project linked to `github.com/cr-montoya/app-nutri`, creates a Neon project, installs Neon's Vercel integration (or manually sets `DATABASE_URL`/`APP_DATABASE_URL`/`AUTH_SECRET` as Vercel environment variables), then opens a throwaway PR to confirm both a preview URL and a Neon branch appear.
 
 ## T8: End-to-end isolation proof
 
-- [ ] T8.1 Playwright E2E covering the phase's actual purpose: register organization A, register organization B, log in as A, confirm the dashboard shows only A's data, then while still authenticated as A request B's dashboard URL and confirm a 404 with no leaked data. Validation: `pnpm test:e2e -- multi-tenant-isolation`. Confirms REQ-012, REQ-013, REQ-016, REQ-017 hold end to end, not just in isolated unit tests.
+- [x] T8.1 Playwright E2E covering the phase's actual purpose: register organization A, register organization B, log in as A, confirm the dashboard shows only A's data, then while still authenticated as A request B's dashboard URL and confirm a 404 with no leaked data. Validation: `pnpm test:e2e -- multi-tenant-isolation`. Confirms REQ-012, REQ-013, REQ-016, REQ-017 hold end to end, not just in isolated unit tests. 1/1 Playwright test passing (full 14-test e2e suite green).
 
 ## After T8.1
 
