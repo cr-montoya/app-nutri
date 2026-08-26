@@ -38,16 +38,13 @@ export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
  * "mine," derived server-side from the caller's session
  * (updateProfessionalProfileAction), never from client-supplied input. Both
  * fields are optional free text (schema.prisma's `Professional.licenseNumber`/
- * `specialty` are nullable): an empty submitted value is normalized to
- * `undefined` so `updateProfessionalProfileAction`'s upsert can clear a
- * previously set value.
+ * `specialty` are nullable). No `.transform()` here (unlike, e.g., normalizing
+ * email elsewhere): `@hookform/resolvers/zod`'s typing ties `useForm`'s
+ * generic to this schema's pre-transform input type, so
+ * `updateProfessionalProfileAction` normalizes an empty submitted string to
+ * `undefined` itself, after parsing.
  */
-const optionalProfileText = z
-  .string()
-  .trim()
-  .max(100)
-  .optional()
-  .transform((value) => (value === "" ? undefined : value));
+const optionalProfileText = z.string().trim().max(100).optional();
 
 export const updateProfessionalProfileSchema = z.object({
   licenseNumber: optionalProfileText,

@@ -40,7 +40,7 @@ Branch: `feat/phase-1a-team-invites`, created by `task-runner` from up-to-date `
 ## T4: Professional profiles (REQ-017 through REQ-019)
 
 - [x] T4.1 Implement `updateProfessionalProfileAction` in `src/server/actions/team.ts`: `requireRole(['ADMIN', 'NUTRITIONIST'])`, derive the caller's own `Membership` via `userId` (never a client-supplied membership id), create-or-update the linked `Professional`. Validation: `pnpm test -- professional-profile`. Closes REQ-017, REQ-018, REQ-019.
-- [ ] T4.2 Build `src/app/(app)/[orgSlug]/team/professional-profile/page.tsx`: the license/specialty form. Validation: `pnpm test:e2e -- professional-profile`.
+- [x] T4.2 Build `src/app/(app)/[orgSlug]/team/professional-profile/page.tsx`: the license/specialty form. Validation: `pnpm test:e2e -- professional-profile`.
 
 ## T5: End-to-end proof
 

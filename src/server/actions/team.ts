@@ -457,7 +457,12 @@ export async function updateProfessionalProfileAction(
   if (!parsed.success) {
     return { success: false, error: GENERIC_PROFILE_VALIDATION_ERROR };
   }
-  const { licenseNumber, specialty } = parsed.data;
+  // updateProfessionalProfileSchema (src/validation/team.ts) deliberately has
+  // no `.transform()` for typing reasons documented there; normalize an
+  // empty submitted string to `undefined` here instead, so a cleared field
+  // is stored as null rather than "".
+  const licenseNumber = parsed.data.licenseNumber || undefined;
+  const specialty = parsed.data.specialty || undefined;
 
   await withTenant(
     { organizationId: session.organizationId, userId: session.user.id },
