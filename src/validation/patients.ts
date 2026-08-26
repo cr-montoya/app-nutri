@@ -6,20 +6,21 @@ import { z } from "zod";
  * validations as creation"). Bounds and formats come straight from
  * requirements.md REQ-002 through REQ-011.
  *
- * Only `fullName`/`phone` are mandatory (REQ-001); every other field is
- * optional. For each optional field, an empty-string submission (the
- * normal shape a blank HTML form field takes, never literally `undefined`)
- * means "not provided" and is valid; a *non-empty* submission is still
- * checked against that field's bounds/format, which is what actually
- * enforces "empty after trimming" (whitespace-only) as a rejection for
- * `documentId` (REQ-004), the one field with no other format check to
- * catch it.
+ * Only `fullName`/`phone` are mandatory (REQ-001); every other field
+ * accepts an empty string ("" -- the shape a blank HTML field submits) as
+ * "not provided," via `z.union([<real shape>, z.literal("")])` rather than
+ * `z.preprocess`. This keeps the schema's Zod *input* type equal to its
+ * *output* type (every field a plain string), which `zodResolver` needs to
+ * type a `useForm` generic against and give inline per-field errors --
+ * same convention `src/validation/team.ts`'s `updateProfessionalProfileSchema`
+ * already established for this exact "optional form field" problem (an
+ * earlier version of this file used `z.preprocess` instead, diverged from
+ * that convention, and lost `patient-form.tsx`'s inline validation as a
+ * result -- a `code-quality` gate finding fixed here, see design.md's
+ * `## Deviations`). The Server Action normalizes a resulting `""` to
+ * `undefined`/`null` before writing to Prisma, the same `|| undefined`
+ * idiom `updateProfessionalProfileAction` already uses.
  */
-
-function emptyToUndefined(val: unknown) {
-  return val === "" || val === undefined || val === null ? undefined : val;
-}
-
 export const patientSchema = z.object({
   // REQ-002: 1-200 chars after trimming.
   fullName: z.string().trim().min(1).max(200),
@@ -32,32 +33,26 @@ export const patientSchema = z.object({
 
   // REQ-004: optional; when provided, 1-50 chars after trimming, no other
   // format restriction (valid document types vary). Whitespace-only input
-  // trims to an empty string, which fails `.min(1)` here -- REQ-004's
-  // "empty after trimming" rejection.
-  documentId: z.preprocess(
-    emptyToUndefined,
-    z.string().trim().min(1).max(50).optional()
-  ),
+  // matches the first union branch, trims to an empty string, and fails
+  // `.min(1)` there -- REQ-004's "empty after trimming" rejection. A
+  // genuinely empty submission matches the `z.literal("")` branch instead
+  // and skips the bounds check entirely.
+  documentId: z.union([z.string().trim().min(1).max(50), z.literal("")]).optional(),
 
-  // REQ-008: optional; when provided, must not be in the future. Checked
-  // with `.refine` (not `z.date().max(new Date())`, evaluated once at
-  // module load) so "now" is read fresh on every parse.
-  birthDate: z.preprocess(
-    emptyToUndefined,
-    z.coerce
-      .date()
-      .optional()
-      .refine((date) => !date || date <= new Date(), "Birth date cannot be in the future.")
-  ),
+  // REQ-008: kept as a plain string here, the shape an `<input type="date">`
+  // submits. Parsed and future-checked by `parseBirthDate` below, called
+  // from the Server Action after this schema passes -- isolates the one
+  // field that needs real coercion instead of making the whole schema's
+  // input type diverge from what the form actually submits.
+  birthDate: z.string().optional(),
 
   // REQ-010: optional; when provided, must be MALE or FEMALE.
-  sex: z.preprocess(emptyToUndefined, z.enum(["MALE", "FEMALE"]).optional()),
+  sex: z.union([z.enum(["MALE", "FEMALE"]), z.literal("")]).optional(),
 
   // REQ-009: optional; when provided, must be a valid email format.
-  email: z.preprocess(
-    emptyToUndefined,
-    z.string().trim().toLowerCase().email("Enter a valid email address.").optional()
-  ),
+  email: z
+    .union([z.string().trim().toLowerCase().email("Enter a valid email address."), z.literal("")])
+    .optional(),
 
   // REQ-011: optional; when provided, at most 300 chars after trimming. No
   // minimum-length rejection specified (unlike documentId), so a
@@ -70,3 +65,30 @@ export type PatientInput = z.infer<typeof patientSchema>;
 export const GENERIC_PATIENT_VALIDATION_ERROR = "Please check the patient details and try again.";
 export const GENERIC_DUPLICATE_DOCUMENT_ID_ERROR =
   "A patient with this document ID already exists in your organization.";
+export const GENERIC_BIRTH_DATE_ERROR = "Enter a valid birth date, not in the future.";
+
+export interface ParsedBirthDate {
+  value?: Date;
+  error?: string;
+}
+
+/**
+ * REQ-008: parses `raw` (`patientSchema.birthDate`'s value -- `""`,
+ * `undefined`, or a `"YYYY-MM-DD"`-shaped string) into a `Date | undefined`,
+ * rejecting an unparseable string or a future date. Called from the Server
+ * Action after `patientSchema.safeParse` succeeds, still before any record
+ * is created or updated -- REQ-008 only requires the rejection happen
+ * before persistence, not that it live inside the Zod schema itself.
+ */
+export function parseBirthDate(raw: string | undefined): ParsedBirthDate {
+  if (!raw) {
+    return {};
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime()) || parsed > new Date()) {
+    return { error: GENERIC_BIRTH_DATE_ERROR };
+  }
+
+  return { value: parsed };
+}

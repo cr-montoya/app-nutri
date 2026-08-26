@@ -66,7 +66,7 @@ test("creates a patient through the form and redirects to its detail page", asyn
   expect(logs.some((log) => log.action === "patient.create")).toBe(true);
 });
 
-test("rejects invalid input and shows a validation error", async ({ page }) => {
+test("rejects invalid input client-side (zodResolver) before ever submitting", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
@@ -78,9 +78,48 @@ test("rejects invalid input and shows a validation error", async ({ page }) => {
   await page.getByLabel("Phone").fill("not-a-phone");
   await page.getByRole("button", { name: /create patient/i }).click();
 
-  await expect(page.getByTestId("patient-form-error")).toBeVisible();
+  // patient-form.tsx's zodResolver(patientSchema) catches this client-side
+  // (REQ-003's phone format), so the form never even calls
+  // createPatientAction -- the inline field error shows, not the generic
+  // server-error block.
+  await expect(page.getByText(/enter a valid phone number/i)).toBeVisible();
   await expect(page).toHaveURL((url) => url.pathname === `/${orgSlug}/patients/new`);
 
   const count = await adminDb.patient.count({ where: { fullName: "Bad Phone Patient" } });
+  expect(count).toBe(0);
+});
+
+test("rejects a server-only validation failure (duplicate document ID) and shows the generic error", async ({
+  page,
+}) => {
+  await adminDb.patient.create({
+    data: {
+      organizationId: orgId,
+      fullName: "Existing Patient",
+      phone: "+15550001234",
+      documentId: `DOC-DUP-${runId}`,
+    },
+  });
+
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: /log in/i }).click();
+  await expect(page).toHaveURL(/\/$/);
+
+  await page.goto(`/${orgSlug}/patients/new`);
+  await page.getByLabel("Full name").fill("Duplicate Document Patient");
+  await page.getByLabel("Phone").fill("+15559990000");
+  await page.getByLabel("Document ID").fill(`DOC-DUP-${runId}`);
+  await page.getByRole("button", { name: /create patient/i }).click();
+
+  // REQ-005's duplicate-documentId rejection can only be caught
+  // server-side (the client has no way to know what other patients
+  // already exist), so this exercises createPatientAction for real and
+  // shows patient-form.tsx's generic server-error block.
+  await expect(page.getByTestId("patient-form-error")).toBeVisible();
+  await expect(page).toHaveURL((url) => url.pathname === `/${orgSlug}/patients/new`);
+
+  const count = await adminDb.patient.count({ where: { fullName: "Duplicate Document Patient" } });
   expect(count).toBe(0);
 });

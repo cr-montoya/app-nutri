@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { patientSchema } from "./patients";
+import { patientSchema, parseBirthDate } from "./patients";
 
 const VALID = {
   fullName: "Jane Doe",
@@ -13,6 +13,12 @@ describe("patientSchema (REQ-001)", () => {
   });
 
   it("accepts every optional field left blank (empty string)", () => {
+    // patientSchema keeps a blank field as "" (not undefined) so its Zod
+    // input/output types match what a form submits, for zodResolver
+    // compatibility (see this file's own doc comment); the Server Action
+    // is what normalizes "" to undefined/null before writing to Prisma
+    // (proven in tests/integration/create-patient.test.ts and
+    // update-patient.test.ts), not the schema itself.
     const result = patientSchema.safeParse({
       ...VALID,
       documentId: "",
@@ -23,10 +29,10 @@ describe("patientSchema (REQ-001)", () => {
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.documentId).toBeUndefined();
-      expect(result.data.birthDate).toBeUndefined();
-      expect(result.data.sex).toBeUndefined();
-      expect(result.data.email).toBeUndefined();
+      expect(result.data.documentId).toBe("");
+      expect(result.data.birthDate).toBe("");
+      expect(result.data.sex).toBe("");
+      expect(result.data.email).toBe("");
     }
   });
 });
@@ -94,17 +100,34 @@ describe("patientSchema.documentId (REQ-004)", () => {
 });
 
 describe("patientSchema.birthDate (REQ-008)", () => {
-  it("accepts a birth date in the past", () => {
+  it("accepts any string shape at the schema level (format/future-date checked by parseBirthDate)", () => {
     expect(patientSchema.safeParse({ ...VALID, birthDate: "1990-01-01" }).success).toBe(true);
+  });
+});
+
+describe("parseBirthDate (REQ-008)", () => {
+  it("returns no value and no error for an empty/undefined input", () => {
+    expect(parseBirthDate(undefined)).toEqual({});
+    expect(parseBirthDate("")).toEqual({});
+  });
+
+  it("parses a valid past date", () => {
+    const result = parseBirthDate("1990-01-01");
+    expect(result.error).toBeUndefined();
+    expect(result.value).toBeInstanceOf(Date);
+    expect(result.value?.toISOString().slice(0, 10)).toBe("1990-01-01");
   });
 
   it("rejects a birth date in the future", () => {
     const future = new Date(Date.now() + 1000 * 60 * 60 * 24 * 365);
-    const result = patientSchema.safeParse({
-      ...VALID,
-      birthDate: future.toISOString().slice(0, 10),
-    });
-    expect(result.success).toBe(false);
+    const result = parseBirthDate(future.toISOString().slice(0, 10));
+    expect(result.error).toBeTruthy();
+    expect(result.value).toBeUndefined();
+  });
+
+  it("rejects an unparseable string", () => {
+    const result = parseBirthDate("not-a-date");
+    expect(result.error).toBeTruthy();
   });
 });
 

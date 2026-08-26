@@ -8,6 +8,7 @@ import { db, withTenant } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import {
   patientSchema,
+  parseBirthDate,
   GENERIC_PATIENT_VALIDATION_ERROR,
   GENERIC_DUPLICATE_DOCUMENT_ID_ERROR,
 } from "@/validation/patients";
@@ -41,6 +42,30 @@ async function resolveIpAddress(): Promise<string | undefined> {
   }
 }
 
+/**
+ * `P2002` (the `(organizationId, documentId)` unique constraint, REQ-005/
+ * REQ-006/REQ-007) and `P2025` ("record to update not found," the
+ * cross-organization rejection REQ-019 relies on) are each handled the
+ * same way at every call site that can hit them; this is the one place
+ * that mapping lives (code-quality finding: replaces three near-identical
+ * `if (error instanceof ... && error.code === ...)` blocks). Returns
+ * `undefined` for any other error, which callers re-throw unchanged.
+ */
+function mapPatientPersistenceError(error: unknown): string | undefined {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return undefined;
+  }
+  if (error.code === "P2002") {
+    return GENERIC_DUPLICATE_DOCUMENT_ID_ERROR;
+  }
+  if (error.code === "P2025") {
+    return GENERIC_NOT_FOUND_ERROR;
+  }
+  return undefined;
+}
+
+const GENERIC_NOT_FOUND_ERROR = "Patient not found.";
+
 export interface CreatePatientActionResult {
   success: boolean;
   error?: string;
@@ -66,6 +91,12 @@ export async function createPatientAction(input: unknown): Promise<CreatePatient
     return { success: false, error: GENERIC_PATIENT_VALIDATION_ERROR };
   }
   const data = parsed.data;
+
+  const birthDate = parseBirthDate(data.birthDate);
+  if (birthDate.error) {
+    return { success: false, error: birthDate.error };
+  }
+
   const ipAddress = await resolveIpAddress();
 
   try {
@@ -75,16 +106,18 @@ export async function createPatientAction(input: unknown): Promise<CreatePatient
         // organizationId is a required scalar in Prisma's generated
         // create-input type, so it's supplied here even inside withTenant;
         // the tenant-context extension (src/lib/db.ts) injects the real
-        // value regardless of what's passed.
+        // value regardless of what's passed. Optional fields normalize a
+        // blank `""` (patientSchema's "not provided" shape) to `undefined`,
+        // which Prisma treats the same as omitting the key entirely.
         const created = await tx.patient.create({
           data: {
             fullName: data.fullName,
             phone: data.phone,
-            documentId: data.documentId,
-            birthDate: data.birthDate,
-            sex: data.sex,
-            email: data.email,
-            address: data.address,
+            documentId: data.documentId || undefined,
+            birthDate: birthDate.value,
+            sex: data.sex || undefined,
+            email: data.email || undefined,
+            address: data.address || undefined,
             organizationId: session.organizationId,
           },
         });
@@ -104,8 +137,9 @@ export async function createPatientAction(input: unknown): Promise<CreatePatient
 
     return { success: true, patientId: patient.id };
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return { success: false, error: GENERIC_DUPLICATE_DOCUMENT_ID_ERROR };
+    const mapped = mapPatientPersistenceError(error);
+    if (mapped) {
+      return { success: false, error: mapped };
     }
     throw error;
   }
@@ -115,8 +149,6 @@ export interface UpdatePatientActionResult {
   success: boolean;
   error?: string;
 }
-
-const GENERIC_NOT_FOUND_ERROR = "Patient not found.";
 
 /**
  * T3.4, closes REQ-012, REQ-021. Reuses `patientSchema` unchanged (REQ-012:
@@ -149,6 +181,12 @@ export async function updatePatientAction(
     return { success: false, error: GENERIC_PATIENT_VALIDATION_ERROR };
   }
   const data = parsed.data;
+
+  const birthDate = parseBirthDate(data.birthDate);
+  if (birthDate.error) {
+    return { success: false, error: birthDate.error };
+  }
+
   const ipAddress = await resolveIpAddress();
 
   try {
@@ -160,10 +198,10 @@ export async function updatePatientAction(
           data: {
             fullName: data.fullName,
             phone: data.phone,
-            documentId: data.documentId ?? null,
-            birthDate: data.birthDate ?? null,
-            sex: data.sex ?? null,
-            email: data.email ?? null,
+            documentId: data.documentId || null,
+            birthDate: birthDate.value ?? null,
+            sex: data.sex || null,
+            email: data.email || null,
             address: data.address || null,
           },
         });
@@ -181,11 +219,9 @@ export async function updatePatientAction(
 
     return { success: true };
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return { success: false, error: GENERIC_DUPLICATE_DOCUMENT_ID_ERROR };
-    }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
-      return { success: false, error: GENERIC_NOT_FOUND_ERROR };
+    const mapped = mapPatientPersistenceError(error);
+    if (mapped) {
+      return { success: false, error: mapped };
     }
     throw error;
   }
@@ -253,8 +289,9 @@ async function setPatientArchivedState(
 
     return { success: true };
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
-      return { success: false, error: GENERIC_NOT_FOUND_ERROR };
+    const mapped = mapPatientPersistenceError(error);
+    if (mapped) {
+      return { success: false, error: mapped };
     }
     throw error;
   }
