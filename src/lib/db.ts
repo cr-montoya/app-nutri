@@ -54,7 +54,8 @@ type QueryArgs = Record<string, unknown>;
  * caller to remember.
  */
 function withoutOrganizationId(data: QueryArgs | undefined): QueryArgs {
-  const { organizationId: _dropped, ...rest } = data ?? {};
+  const rest = { ...(data ?? {}) };
+  delete rest.organizationId;
   return rest;
 }
 
