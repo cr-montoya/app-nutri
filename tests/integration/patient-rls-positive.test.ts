@@ -64,7 +64,9 @@ describe("withTenant: positive RLS (Patient, AuditLog)", () => {
 
   it("updates its own Patient row through withTenant", async () => {
     const patient = await withTenant({ organizationId: orgA.id, userId: userA.id }, (tx) =>
-      tx.patient.create({ data: { fullName: "Update Me", phone: "+15557654321" } })
+      tx.patient.create({
+        data: { fullName: "Update Me", phone: "+15557654321", organizationId: orgA.id },
+      })
     );
 
     const updated = await withTenant({ organizationId: orgA.id, userId: userA.id }, (tx) =>
@@ -76,7 +78,9 @@ describe("withTenant: positive RLS (Patient, AuditLog)", () => {
 
   it("creates and reads its own AuditLog, scoped to the caller's organization", async () => {
     const patient = await withTenant({ organizationId: orgA.id, userId: userA.id }, (tx) =>
-      tx.patient.create({ data: { fullName: "Audited Patient", phone: "+15551112222" } })
+      tx.patient.create({
+        data: { fullName: "Audited Patient", phone: "+15551112222", organizationId: orgA.id },
+      })
     );
 
     const createdLog = await withTenant({ organizationId: orgA.id, userId: userA.id }, (tx) =>
