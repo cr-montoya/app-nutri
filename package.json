@@ -2,6 +2,7 @@
   "name": "appnutri",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.6.0",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
@@ -12,8 +13,7 @@
     "test:e2e": "playwright test",
     "scan:sast": "semgrep --config auto --error src",
     "scan:secrets": "gitleaks detect --source . --no-git -v",
-    "scan:deps": "pnpm audit --audit-level=high",
-    "sbom": "pnpm dlx @cyclonedx/cyclonedx-npm --output-file sbom.json"
+    "scan:deps": "pnpm audit --audit-level=high"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
