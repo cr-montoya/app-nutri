@@ -6,10 +6,6 @@ import { z } from "zod";
  * (trimmed, lowercased) before hitting sendInviteAction's uniqueness and
  * duplicate-pending checks. Role is restricted to the existing `Role` enum
  * values (design.md: Invite.role reuses Role, not a separate InviteRole).
- *
- * The accept-invite schema (name/password, T3.1) is added to this same file
- * later, per design.md's "Files to create or update" -- not yet, out of
- * this task's scope.
  */
 
 export const sendInviteSchema = z.object({
@@ -18,3 +14,19 @@ export const sendInviteSchema = z.object({
 });
 
 export type SendInviteInput = z.infer<typeof sendInviteSchema>;
+
+/**
+ * Accept-invite validation (T3.1, closes REQ-007, REQ-008). Same bounds as
+ * src/validation/auth.ts's registerSchema: name 1-100 chars after
+ * trimming, password min 12 chars. The invited email is deliberately not a
+ * field here (REQ-006: "displayed but not editable") -- it comes from the
+ * resolved `Invite` row via the token, never from client input; the raw
+ * token itself is handled separately as a route param by
+ * acceptInviteAction, not part of this schema.
+ */
+export const acceptInviteSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  password: z.string().min(12),
+});
+
+export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
