@@ -8,8 +8,8 @@ Branch: `feat/phase-1b-patients`, created by `task-runner` from up-to-date `main
 - [x] T1.2 Run the migration against the dev Neon branch. Validation: `pnpm exec prisma migrate dev` succeeds.
 - [x] T1.3 Add `CREATE EXTENSION IF NOT EXISTS pg_trgm` and the trigram index on `patients."fullName"` to the migration. Validation: manual `psql` check confirming the extension and index exist.
 - [x] T1.4 Add the RLS policies for `patients` and `audit_logs` from `design.md` to the migration. Validation: manual `psql` check confirming RLS is enabled and both policies exist.
-- [ ] T1.5 Positive RLS test: a session scoped to org A reads/writes its own `Patient` and `AuditLog` rows. Validation: `pnpm test -- patient-rls-positive`. Closes REQ-019.
-- [ ] T1.6 Negative RLS test: a raw `pg` client scoped to org A gets zero rows querying org B's `Patient` or `AuditLog` rows directly. Validation: `pnpm test -- patient-rls-negative`. Closes REQ-020.
+- [x] T1.5 Positive RLS test: a session scoped to org A reads/writes its own `Patient` and `AuditLog` rows. Validation: `pnpm test -- patient-rls-positive`. Closes REQ-019.
+- [x] T1.6 Negative RLS test: a raw `pg` client scoped to org A gets zero rows querying org B's `Patient` or `AuditLog` rows directly. Validation: `pnpm test -- patient-rls-negative`. Closes REQ-020.
 
 ## T2: Audit logging (REQ-021, REQ-022)
 

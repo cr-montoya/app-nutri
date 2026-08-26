@@ -25,7 +25,13 @@ export interface TenantContext {
  * excluded: a `User` is a global login identity looked up by email before
  * any org context exists, and an `Organization` is the tenant itself.
  */
-const TENANT_SCOPED_MODELS = new Set(["Membership", "Professional", "Invite"]);
+const TENANT_SCOPED_MODELS = new Set([
+  "Membership",
+  "Professional",
+  "Invite",
+  "Patient",
+  "AuditLog",
+]);
 
 const tenantStorage = new AsyncLocalStorage<TenantContext>();
 
