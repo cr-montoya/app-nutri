@@ -11,7 +11,7 @@ Branch: `feat/phase-0-scaffold`, created by `task-runner` from up-to-date `main`
 ## T2: Schema and tenant isolation (REQ-012, REQ-013, REQ-020)
 
 - [x] T2.1 Write `prisma/schema.prisma` per `design.md`: `Organization`, `User`, `Membership` (with `userId @unique`, REQ-020), `Professional`, `Role` enum. Validation: `pnpm exec prisma validate`.
-- [ ] T2.2 Run the initial migration against the dev Neon branch. Validation: `pnpm exec prisma migrate dev` succeeds and generates the migration file.
+- [x] T2.2 Run the initial migration against the dev Neon branch. Validation: `pnpm exec prisma migrate dev` succeeds and generates the migration file. **Deviation**: no Neon account/CLI is available in this environment; ran against a local Postgres 16 container (Docker) instead. Same engine, same migration SQL either way; running it against an actual Neon dev branch is still required before shipping and is noted in the PR as outstanding infrastructure setup.
 - [ ] T2.3 Add the RLS statements from `design.md` (`ENABLE ROW LEVEL SECURITY` + policy on `memberships` and `professionals`) to the migration. Validation: manual `psql` check confirming RLS is enabled and the policy exists on both tables.
 - [ ] T2.4 Implement `src/lib/db.ts`: the Prisma Client Extension and `withTenant`, using `AsyncLocalStorage` and `SET LOCAL app.current_org_id` inside a transaction. Validation: `pnpm test -- db`, a unit test exercising `withTenant` with two fake org ids and asserting the injected filter.
 - [ ] T2.5 Positive RLS test: a session scoped to org A reads/writes its own `Membership`/`Professional` rows through `withTenant`. Validation: `pnpm test -- rls-positive`. Closes REQ-012.
