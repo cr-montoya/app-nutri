@@ -119,8 +119,9 @@ export function resolveRuntimeDatabaseUrl(
   // Neon supplies DATABASE_URL dynamically for Vercel Preview and Production
   // deployments. Locally it remains the migration-owner URL, so runtime code
   // must keep using the least-privilege APP_DATABASE_URL instead.
-  const variableName = environment.VERCEL_ENV ? "DATABASE_URL" : "APP_DATABASE_URL";
-  const url = environment[variableName];
+  const isVercel = Boolean(environment.VERCEL_ENV);
+  const variableName = isVercel ? "DATABASE_URL" : "APP_DATABASE_URL";
+  const url = isVercel ? environment.DATABASE_URL : environment.APP_DATABASE_URL;
   if (!url) {
     throw new Error(
       `${variableName} is not set. The app must connect with a non-superuser, ` +
