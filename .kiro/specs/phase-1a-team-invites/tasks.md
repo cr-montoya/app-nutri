@@ -13,10 +13,10 @@ Branch: `feat/phase-1a-team-invites`, created by `task-runner` from up-to-date `
 
 ## T2: Sending, revoking, and listing invites (REQ-001 through REQ-005, REQ-014 through REQ-016)
 
-- [ ] T2.1 Write `src/validation/team.ts`'s invite schema (email format). Validation: `pnpm test -- validation`. Closes REQ-002.
-- [ ] T2.2 Implement `sendInviteAction` in `src/server/actions/team.ts`: `requireRole(['ADMIN'])`, global email-uniqueness check, duplicate-pending-invite check, token generation (`crypto.randomBytes(32)`) and SHA-256 hashing, `Invite` creation with `expiresAt` 7 days out. Validation: `pnpm test -- send-invite`. Closes REQ-001, REQ-003, REQ-004, REQ-005, REQ-016.
-- [ ] T2.3 Implement `revokeInviteAction`: `requireRole(['ADMIN'])`, conditional `updateMany` setting `revokedAt` only if still pending. Validation: `pnpm test -- revoke-invite`. Closes REQ-014, REQ-016.
-- [ ] T2.4 Build `src/app/(app)/[orgSlug]/team/page.tsx`: list of `Membership`s and pending `Invite`s, invite form, revoke buttons. Validation: `pnpm test:e2e -- team-page`. Closes REQ-015.
+- [x] T2.1 Write `src/validation/team.ts`'s invite schema (email format). Validation: `pnpm test -- validation`. Closes REQ-002.
+- [x] T2.2 Implement `sendInviteAction` in `src/server/actions/team.ts`: `requireRole(['ADMIN'])`, global email-uniqueness check, duplicate-pending-invite check, token generation (`crypto.randomBytes(32)`) and SHA-256 hashing, `Invite` creation with `expiresAt` 7 days out. Validation: `pnpm test -- send-invite`. Closes REQ-001, REQ-003, REQ-004, REQ-005, REQ-016.
+- [x] T2.3 Implement `revokeInviteAction`: `requireRole(['ADMIN'])`, conditional `updateMany` setting `revokedAt` only if still pending. Validation: `pnpm test -- revoke-invite`. Closes REQ-014, REQ-016.
+- [x] T2.4 Build `src/app/(app)/[orgSlug]/team/page.tsx`: list of `Membership`s and pending `Invite`s, invite form, revoke buttons. Validation: `pnpm test:e2e -- team-page`. Closes REQ-015.
 
 ## T3: Accepting an invite (REQ-006 through REQ-013)
 
