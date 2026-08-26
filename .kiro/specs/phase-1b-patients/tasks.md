@@ -13,7 +13,7 @@ Branch: `feat/phase-1b-patients`, created by `task-runner` from up-to-date `main
 
 ## T2: Audit logging (REQ-021, REQ-022)
 
-- [ ] T2.1 Implement `logAudit()` in `src/lib/audit.ts` per `design.md`'s signature, reading `ipAddress` from the `x-forwarded-for` header via `next/headers`. Validation: `pnpm test -- audit-log`.
+- [x] T2.1 Implement `logAudit()` in `src/lib/audit.ts` per `design.md`'s signature, reading `ipAddress` from the `x-forwarded-for` header via `next/headers`. Validation: `pnpm test -- audit-log`.
 
 ## T3: Patient CRUD Server Actions (REQ-001 through REQ-014, REQ-021)
 
