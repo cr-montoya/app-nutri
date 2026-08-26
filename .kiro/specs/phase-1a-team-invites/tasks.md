@@ -20,8 +20,8 @@ Branch: `feat/phase-1a-team-invites`, created by `task-runner` from up-to-date `
 
 ## T3: Accepting an invite (REQ-006 through REQ-013)
 
-- [ ] T3.1 Extend `src/validation/team.ts` with the accept-invite schema (name 1 to 100 chars, password min 12 chars). Validation: `pnpm test -- validation`. Closes REQ-007, REQ-008.
-- [ ] T3.2 Implement the token lookup half of `acceptInviteAction`: hash the incoming token, set `app.invite_lookup_token_hash`, query the `Invite`, evaluate the derived-pending check (not expired, not revoked, not accepted). Validation: `pnpm test -- invite-lookup`. Closes REQ-006, REQ-013.
+- [x] T3.1 Extend `src/validation/team.ts` with the accept-invite schema (name 1 to 100 chars, password min 12 chars). Validation: `pnpm test -- validation`. Closes REQ-007, REQ-008.
+- [x] T3.2 Implement the token lookup half of `acceptInviteAction`: hash the incoming token, set `app.invite_lookup_token_hash`, query the `Invite`, evaluate the derived-pending check (not expired, not revoked, not accepted). Validation: `pnpm test -- invite-lookup`. Closes REQ-006, REQ-013.
 - [ ] T3.3 Implement the HIBP check reusing the same helper as `phase-0-scaffold`'s registration flow. Validation: `pnpm test -- invite-hibp`. Closes REQ-009.
 - [ ] T3.4 Implement the accept transaction: re-check pending at commit time, create `User` + `Membership` (role from the invite), conditional `updateMany` on the `Invite` setting `acceptedAt`, handling a zero-rows-affected result as the same generic error as REQ-013. Validation: `pnpm test -- accept-invite`. Closes REQ-010, REQ-012.
 - [ ] T3.5 Concurrency test: two simultaneous accept requests for the same invite/email, confirming exactly one succeeds and the loser gets the generic error, no duplicate `User`. Validation: `pnpm test -- accept-invite-race`. Closes REQ-011.

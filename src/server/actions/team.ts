@@ -1,6 +1,7 @@
 "use server";
 
 import { createHash, randomBytes } from "node:crypto";
+import type { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { db, withTenant } from "@/lib/db";
 import { ForbiddenError, requireRole } from "@/lib/rbac";
@@ -161,4 +162,106 @@ export async function revokeInviteAction(inviteId: string): Promise<RevokeInvite
   }
 
   return { success: true };
+}
+
+/**
+ * T3.2, closes REQ-006, REQ-013 (the lookup half of `acceptInviteAction`).
+ *
+ * Shape of the raw `invites` row this module's pre-authentication lookup
+ * reads. Field names match the Prisma model's camelCase names 1:1 -- unlike
+ * table/column-name mapping via `@@map`, there is no `@map` on any of
+ * `Invite`'s individual fields (prisma/migrations/20260826152343_add_invite_model),
+ * so no renaming is needed between the raw SQL result and this type.
+ */
+interface InviteRow {
+  id: string;
+  organizationId: string;
+  email: string;
+  role: Role;
+  tokenHash: string;
+  expiresAt: Date;
+  acceptedAt: Date | null;
+  revokedAt: Date | null;
+  createdAt: Date;
+}
+
+function hashInviteToken(rawToken: string): string {
+  return createHash("sha256").update(rawToken).digest("hex");
+}
+
+/**
+ * REQ-013's derived-pending check (design.md: no `status` enum on `Invite`):
+ * not expired, not revoked, not already accepted. Shared by the initial
+ * token lookup (T3.2) and, conceptually, the accept transaction's re-check
+ * at commit time (T3.4) -- though that re-check is expressed as a single
+ * conditional SQL `UPDATE ... WHERE`, not a second call to this function,
+ * since it must be atomic with the write itself (see acceptInviteAction).
+ */
+function isInvitePending(
+  invite: Pick<InviteRow, "acceptedAt" | "revokedAt" | "expiresAt">,
+  now: Date = new Date()
+): boolean {
+  return invite.acceptedAt === null && invite.revokedAt === null && invite.expiresAt > now;
+}
+
+export const GENERIC_INVALID_INVITE_ERROR = "This invite link is invalid or has expired.";
+
+/**
+ * Looks up an `Invite` by its raw (unhashed) URL token, *before* any
+ * session or organization context exists -- the org is a result of this
+ * lookup, not a precondition of it. This is the one documented exception to
+ * `withTenant` per ADR-0002 (docs/adr/0002-token-scoped-rls-lookup.md) and
+ * .agents/rules/tenant-isolation.md: `Invite` is tenant-scoped
+ * (TENANT_SCOPED_MODELS in src/lib/db.ts), so the normal Prisma model
+ * methods (`db.invite.findUnique`, etc.) would either throw (no
+ * `withTenant` context) or, if forced through `withTenant`, need an
+ * `organizationId` this call doesn't have yet -- discovering it is the
+ * whole point.
+ *
+ * Uses `$executeRaw`/`$queryRaw`, Prisma's raw-SQL escape hatch, which is
+ * NOT intercepted by the tenant-context extension's `$allModels.
+ * $allOperations` hook (that hook only wraps the generated model methods
+ * like `.findUnique`, never raw SQL) -- the same reason
+ * tests/integration/invite-token-lookup-rls.test.ts (T1.6) could exercise
+ * this RLS branch at all, just via a raw `pg` client there instead of
+ * Prisma. `app.invite_lookup_token_hash` is set to the server-computed
+ * SHA-256 hash of the raw token (never the raw token or a client-supplied
+ * value directly) immediately before the one query that needs it, per the
+ * RLS policy's token-scoped branch.
+ *
+ * Returns `null` uniformly for "no such invite", "expired", "revoked", and
+ * "already accepted" (REQ-013: the same generic outcome in all four cases,
+ * never distinguished to the caller).
+ */
+export async function findPendingInviteByToken(rawToken: string): Promise<InviteRow | null> {
+  const tokenHash = hashInviteToken(rawToken);
+
+  const rows = await db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.invite_lookup_token_hash', ${tokenHash}, true)`;
+    return tx.$queryRaw<InviteRow[]>`SELECT * FROM invites WHERE "tokenHash" = ${tokenHash}`;
+  });
+
+  const invite = rows[0];
+  if (!invite || !isInvitePending(invite)) {
+    return null;
+  }
+
+  return invite;
+}
+
+/**
+ * Read-only subset of `findPendingInviteByToken`'s result, for the invite
+ * page's read-only email display (T3.7) -- never the full row (organizationId,
+ * tokenHash, etc. have no reason to reach a Server Component's rendered
+ * output). `acceptInviteAction` calls `findPendingInviteByToken` directly
+ * instead, since it needs `id`/`organizationId`/`role`.
+ */
+export async function lookupInviteByToken(
+  rawToken: string
+): Promise<{ email: string; role: Role } | null> {
+  const invite = await findPendingInviteByToken(rawToken);
+  if (!invite) {
+    return null;
+  }
+  return { email: invite.email, role: invite.role };
 }
