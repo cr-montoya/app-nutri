@@ -44,7 +44,7 @@ Branch: `feat/phase-1a-team-invites`, created by `task-runner` from up-to-date `
 
 ## T5: End-to-end proof
 
-- [ ] T5.1 Playwright E2E: ADMIN sends an invite, copies the link, opens it in a fresh session, accepts it as a `NUTRITIONIST`, logs in as that new user, confirms they can add their own professional profile but cannot see or edit the ADMIN's. Validation: `pnpm test:e2e -- team-invites-e2e`. Confirms REQ-001, REQ-010, REQ-016 through REQ-019 hold end to end.
+- [x] T5.1 Playwright E2E: ADMIN sends an invite, copies the link, opens it in a fresh session, accepts it as a `NUTRITIONIST`, logs in as that new user, confirms they can add their own professional profile but cannot see or edit the ADMIN's. Validation: `pnpm test:e2e -- team-invites-e2e`. Confirms REQ-001, REQ-010, REQ-016 through REQ-019 hold end to end.
 
 ## After T5.1
 
