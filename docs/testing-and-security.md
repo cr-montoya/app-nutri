@@ -65,7 +65,7 @@ DAST (OWASP ZAP Baseline Scan) runs in CI against the Vercel preview deployment,
 | A02 Cryptographic Failures | argon2id for passwords, TLS/HSTS, field-level encryption evaluation for clinical notes (Phase 5) |
 | A03 Injection | Prisma (parameterized queries), Zod at the boundary |
 | A04 Insecure Design | SDD with Security/Reviewer gates before closing any sensitive spec |
-| A05 Security Misconfiguration | Secrets only in Vercel environment variables, never in the client bundle |
+| A05 Security Misconfiguration | Runtime secrets only in Vercel environment variables, never in the client bundle; CI-only migration secrets only in GitHub Actions secrets and never in Vercel |
 | A07 Auth Failures | argon2id, rate limiting on auth routes, `tokenVersion` to invalidate sessions |
 | A08 Data Integrity Failures | `BodyCompositionResult` is never overwritten (traceability of the protocol used) |
 | A09 Logging/Monitoring Failures | `AuditLog` for every clinical access/mutation; never PII in application logs |
