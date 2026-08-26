@@ -114,6 +114,13 @@ model Patient {
 
   @@unique([organizationId, documentId])
   @@index([organizationId])
+  // GIN/trigram index for REQ-017's case-insensitive partial name search
+  // (prisma/migrations/20260826195957_add_patient_fullname_trgm_index).
+  // Declared here too so `prisma migrate dev`'s schema diff doesn't
+  // propose dropping it on a future migration -- it was created via raw
+  // SQL (`gin_trgm_ops` isn't a Prisma-native operator class keyword), but
+  // this `@@index` tells Prisma's diff engine the index is expected.
+  @@index([fullName(ops: raw("gin_trgm_ops"))], type: Gin, map: "patients_full_name_trgm_idx")
   @@map("patients")
 }
 
