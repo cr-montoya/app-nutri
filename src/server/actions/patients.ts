@@ -1,9 +1,10 @@
 "use server";
 
 import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
-import { withTenant } from "@/lib/db";
+import { db, withTenant } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import {
   patientSchema,
@@ -204,6 +205,14 @@ export interface ArchivePatientActionResult {
  * tenant-context extension injects `organizationId` into `where`, so a
  * foreign `patientId` throws P2025, mapped to the same generic
  * "not found".
+ *
+ * T4.5: revalidates exactly the list and detail paths that display this
+ * patient (`nextjs-architect.md`'s scoped-revalidation guidance), not a
+ * broader invalidation. `Organization` isn't tenant-scoped (src/lib/db.ts),
+ * so resolving its slug for the path is a direct `db.organization` read,
+ * same pattern as src/app/(app)/[orgSlug]/dashboard/page.tsx -- this keeps
+ * the function's own parameters unchanged (just `patientId`), rather than
+ * threading `orgSlug` through from the caller.
  */
 async function setPatientArchivedState(
   patientId: string,
@@ -232,6 +241,15 @@ async function setPatientArchivedState(
         });
       }
     );
+
+    const organization = await db.organization.findUnique({
+      where: { id: session.organizationId },
+      select: { slug: true },
+    });
+    if (organization) {
+      revalidatePath(`/${organization.slug}/patients`);
+      revalidatePath(`/${organization.slug}/patients/${patientId}`);
+    }
 
     return { success: true };
   } catch (error) {

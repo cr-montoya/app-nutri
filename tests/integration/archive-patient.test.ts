@@ -8,6 +8,11 @@ import { adminDb } from "../helpers/admin-db";
 
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
 vi.mock("next/headers", () => ({ headers: vi.fn().mockResolvedValue(new Headers()) }));
+// T4.5's revalidatePath call requires a real Next.js request/render scope
+// (`static generation store`) that doesn't exist when calling the action
+// directly in a Vitest test -- mocked here the same way `@/lib/auth` is,
+// not exercised by this file (see tests/e2e/edit-patient.spec.ts instead).
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 const { archivePatientAction, unarchivePatientAction } = await import("@/server/actions/patients");
 const { auth } = await import("@/lib/auth");
