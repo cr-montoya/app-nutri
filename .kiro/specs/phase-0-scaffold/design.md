@@ -23,6 +23,55 @@ No Prisma schema, migration, tenant policy, RBAC rule, or UI changes are require
 
 This is the decision recorded in ADR-0003.
 
+## Preview security gates (REQ-025 through REQ-029)
+
+Specialist persona applied: `security.md` (CI/CD, DAST, SBOM, and secret-handling checklist). This section adds deployment security gates only; it does not alter application routes, Prisma schema, RLS, RBAC, or client-visible behavior.
+
+### DAST workflow
+
+`.github/workflows/dast.yml` will subscribe to GitHub's `deployment_status` event. A job runs only when all of these conditions are true:
+
+1. `deployment_status.state` is `success` and its `environment` is `Preview`.
+2. `deployment_status.environment_url` is present and is the scan target.
+3. The deployment SHA is associated with a pull request whose `head.repo.full_name` equals the current repository. The job queries GitHub's associated-pull-requests API with the read-only `GITHUB_TOKEN`; this excludes fork deployments before the bypass secret is made available.
+
+The workflow checks out the default branch to ensure the scanner's policy cannot be altered by the deployed pull-request code. It runs the maintained, commit-pinned `zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25` (release `v0.15.0`) with `allow_issue_writing: false`. The action's target is the deployment-status URL, its HTML/Markdown/JSON reports are uploaded under a deterministic artifact name, and no report is posted as a GitHub issue.
+
+Before invoking ZAP, a shell preflight checks that `VERCEL_AUTOMATION_BYPASS_SECRET` is non-empty without printing it. The ZAP step receives that value only through the action's supported environment contract:
+
+| Environment variable | Value |
+|---|---|
+| `ZAP_AUTH_HEADER` | `x-vercel-protection-bypass` |
+| `ZAP_AUTH_HEADER_VALUE` | `${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}` |
+| `ZAP_AUTH_HEADER_SITE` | origin of the Vercel Preview URL |
+
+The token is never interpolated into a shell command, workflow output, artifact name, issue, or repository file. It is consumed by Vercel at Deployment Protection before the request reaches the application. Preview protection stays enabled; no configuration makes a Preview URL public.
+
+`.zap/rules.tsv` is the committed ZAP Baseline policy. It makes missing `HttpOnly` (`10010`) and `Secure` (`10011`) cookie flags `FAIL`, because they are required for the Auth.js session cookie. All other initial baseline rules are `WARN` so they are reported and triaged before becoming merge-blocking policy; a later change to the policy must update this file and its rationale in the PR. ZAP's exit status therefore blocks a preview only for the explicit `FAIL` rules, as required by REQ-027.
+
+### SBOM and repository documentation
+
+The repository will rely on pnpm's built-in SBOM command, not the shadowed `package.json` script. The documented and CI command is:
+
+```bash
+mkdir -p artifacts
+pnpm sbom --sbom-format cyclonedx > artifacts/sbom.cdx.json
+```
+
+`security.yml` will add a `sbom` job for pull requests. It checks out the PR ref, runs the command above, validates that `artifacts/sbom.cdx.json` is non-empty JSON, and uploads it with `actions/upload-artifact` pinned by commit. The SBOM has no secret inputs and its generated `artifacts/` directory is ignored by Git.
+
+`README.md` will use pnpm-only commands and the RLS validation checklist in this document will mark the positive and negative tests as completed with their real test commands.
+
+### Failure behavior
+
+| Condition | Result |
+|---|---|
+| Vercel Preview has not succeeded, has no URL, is not `Preview`, or belongs to a fork | No DAST job runs and no secret is accessed. |
+| Required GitHub secret is absent | DAST job fails before ZAP starts; Preview protection remains enabled. |
+| ZAP rule classified as `FAIL` fires | DAST job fails and uploads the report. |
+| ZAP warning fires | DAST job passes but uploads the report for triage. |
+| SBOM command or JSON validation fails | SBOM job fails and no successful artifact is reported. |
+
 ## Schema (database-architect)
 
 ```prisma
@@ -98,8 +147,8 @@ CREATE POLICY tenant_isolation ON professionals
 
 - [x] `ENABLE ROW LEVEL SECURITY` present on both tables.
 - [x] Both policies reference `current_setting('app.current_org_id', true)`, set server-side only (see Tenant-context propagation below), never a client-supplied value.
-- [ ] Positive test (task, not yet run): a session scoped to org A reads/writes its own `Membership`/`Professional` rows. Satisfies REQ-012.
-- [ ] Negative test (task, not yet run): a raw `psql`/`pg` client with `app.current_org_id` set to org A gets zero rows querying org B directly, bypassing Prisma entirely. Satisfies REQ-013.
+- [x] Positive test: `pnpm test -- rls-positive` passes against the Neon app role, proving an org A session reads/writes its own `Membership`/`Professional` rows. Satisfies REQ-012.
+- [x] Negative test: `pnpm test -- rls-negative` passes against the Neon app role, proving a raw `pg` client scoped to org A gets zero rows for org B. Satisfies REQ-013.
 - [x] Policy overhead: both policies filter on an indexed column (`organizationId` on both tables), so no sequential scan risk at any realistic Phase 0 scale.
 
 Both boxes without a task yet are written up as concrete tasks in `tasks.md`, not left implicit.
@@ -156,6 +205,11 @@ Request → middleware.ts (auth() checks session exists) →
 | REQ-022 | Runtime URL resolver in `src/lib/db.ts`, selecting the Vercel-provided Neon URL only when `VERCEL_ENV` is present |
 | REQ-023 | Neon integration configured for `appnutri_app`; deployment validation confirms the restricted current user, never an owner connection |
 | REQ-024 | A redeployed PR preview uses the dynamic Neon URL and serves `/register` |
+| REQ-025 | `.github/workflows/dast.yml`, triggered by successful internal Vercel Preview deployment status, uses the commit-pinned OWASP ZAP Baseline action |
+| REQ-026 | DAST preflight plus ZAP action header environment; only GitHub Actions injects the masked bypass secret |
+| REQ-027 | `.zap/rules.tsv` and the ZAP artifact configuration; only explicit `FAIL` policy rules block the job |
+| REQ-028 | `security.yml` SBOM job runs pnpm's CycloneDX command, validates its JSON, and uploads the artifact |
+| REQ-029 | pnpm-only README commands and the completed RLS validation records above |
 
 ## Files to create or update
 
@@ -174,6 +228,11 @@ src/app/(auth)/login/page.tsx                  # new
 src/app/(app)/[orgSlug]/layout.tsx             # new: session/org-slug check
 src/app/(app)/[orgSlug]/dashboard/page.tsx     # new
 package.json, pnpm-lock.yaml                   # new: Next.js, Prisma, Auth.js, @node-rs/argon2, Zod, Tailwind, shadcn deps
+.github/workflows/dast.yml                      # new: protected Vercel Preview ZAP Baseline gate
+.github/workflows/security.yml                  # update: PR SBOM artifact job
+.zap/rules.tsv                                  # new: versioned ZAP Baseline policy
+.gitignore                                      # update: generated artifacts directory
+README.md                                       # update: pnpm-only local commands
 ```
 
 ## Multi-tenant isolation and RBAC impact
