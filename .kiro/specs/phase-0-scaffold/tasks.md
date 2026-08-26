@@ -36,8 +36,8 @@ Branch: `feat/phase-0-scaffold`, created by `task-runner` from up-to-date `main`
 
 ## T6: Workspace routes (REQ-014, REQ-017)
 
-- [ ] T6.1 Build `src/app/(app)/[orgSlug]/layout.tsx`: resolve the session, compare `orgSlug` to the session's organization, `notFound()` on any mismatch (REQ-017's undifferentiated 404). Validation: `pnpm test:e2e -- wrong-org`. Closes REQ-017.
-- [ ] T6.2 Build `src/app/(app)/[orgSlug]/dashboard/page.tsx`: display the organization's name and the user's role, no clinical data. Validation: `pnpm test:e2e -- dashboard`. Closes REQ-014.
+- [x] T6.1 Build `src/app/(app)/[orgSlug]/layout.tsx`: resolve the session, compare `orgSlug` to the session's organization, `notFound()` on any mismatch (REQ-017's undifferentiated 404). Validation: `pnpm test:e2e -- wrong-org`. Closes REQ-017. 2/2 Playwright tests passing.
+- [x] T6.2 Build `src/app/(app)/[orgSlug]/dashboard/page.tsx`: display the organization's name and the user's role, no clinical data. Validation: `pnpm test:e2e -- dashboard`. Closes REQ-014. 1/1 Playwright test passing.
 
 ## T7: Deploy (REQ-019)
 
