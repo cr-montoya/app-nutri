@@ -1,11 +1,13 @@
 "use server";
 
 import { createHash, randomBytes } from "node:crypto";
-import type { Role } from "@prisma/client";
+import { hash } from "@node-rs/argon2";
+import { Prisma, type Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { db, withTenant } from "@/lib/db";
 import { ForbiddenError, requireRole } from "@/lib/rbac";
-import { sendInviteSchema } from "@/validation/team";
+import { sendInviteSchema, acceptInviteSchema } from "@/validation/team";
+import { checkPasswordNotBreached, BreachedPasswordError } from "@/validation/auth";
 
 /**
  * T2.2, T2.3: ADMIN-only invite management. Both actions re-derive the
@@ -264,4 +266,133 @@ export async function lookupInviteByToken(
     return null;
   }
   return { email: invite.email, role: invite.role };
+}
+
+export interface AcceptInviteActionResult {
+  success: boolean;
+  error?: string;
+}
+
+const GENERIC_ACCEPT_VALIDATION_ERROR = "Please check your details and try again.";
+// REQ-011 reuses the same GENERIC_EMAIL_TAKEN_ERROR constant (module scope,
+// above) sendInviteAction already uses -- the exact same generic error as
+// phase-0-scaffold's REQ-002/registerAction's own P2002 handling, since
+// both are the same underlying User.email unique-constraint race.
+
+/**
+ * Thrown inside the accept transaction (T3.4) when the commit-time
+ * conditional UPDATE on `invites` affects zero rows -- REQ-012's race
+ * (revoked/accepted/expired between the initial lookup and this write).
+ * Throwing inside `db.$transaction`'s callback rolls back the whole
+ * transaction, including the `User`/`Membership` rows just created.
+ */
+class InviteNoLongerPendingError extends Error {}
+
+/**
+ * T3.3, T3.4: closes REQ-009, REQ-010, REQ-012. Built as one function since
+ * REQ-009's HIBP check gates entry into REQ-010's create transaction --
+ * there is no meaningful intermediate state where one exists without the
+ * other (see the T3.3/T3.4 commit note in the spec's task history).
+ *
+ * `rawToken` comes from the `[token]` route param (T3.7), never from the
+ * form body itself -- `acceptInviteSchema` (T3.1) deliberately has no
+ * `email`/`token` field, so there is no client-writable way to target a
+ * different invite than the one the URL resolved to.
+ */
+export async function acceptInviteAction(
+  rawToken: string,
+  input: unknown
+): Promise<AcceptInviteActionResult> {
+  const parsed = acceptInviteSchema.safeParse(input);
+  if (!parsed.success) {
+    // REQ-007, REQ-008: rejected before any record is created.
+    return { success: false, error: GENERIC_ACCEPT_VALIDATION_ERROR };
+  }
+  const { name, password } = parsed.data;
+
+  // REQ-006, REQ-013: the initial lookup. A second, atomic re-check happens
+  // at commit time below (REQ-010, REQ-012) to close the TOCTOU gap between
+  // this call and the write.
+  const invite = await findPendingInviteByToken(rawToken);
+  if (!invite) {
+    return { success: false, error: GENERIC_INVALID_INVITE_ERROR };
+  }
+
+  try {
+    // REQ-009: rejected before any record is created. Same helper
+    // registerAction uses (src/server/actions/auth.ts), same fail-open
+    // behavior on an HIBP outage -- nothing new to decide here.
+    await checkPasswordNotBreached(password);
+  } catch (error) {
+    if (error instanceof BreachedPasswordError) {
+      return { success: false, error: error.message };
+    }
+    throw error;
+  }
+
+  const passwordHash = await hash(password); // argon2id defaults, ADR-0001
+
+  try {
+    await db.$transaction(async (tx) => {
+      // Bootstrap tenant context for this invite's organization. There is
+      // no `withTenant` session yet, and the new `User`'s id (needed for a
+      // real `TenantContext`) doesn't exist until this same transaction
+      // creates it -- the exact chicken-and-egg case registerAction's own
+      // first `Membership` create documents (src/server/actions/auth.ts).
+      // This also satisfies the invites RLS policy's org-scoped branch for
+      // the conditional UPDATE below.
+      await tx.$executeRaw`SELECT set_config('app.current_org_id', ${invite.organizationId}, true)`;
+
+      // REQ-011: the `User.email` unique constraint (phase-0-scaffold) is
+      // what actually guarantees only one of two racing accepts for the
+      // same email succeeds; caught as P2002 below, same pattern as
+      // registerAction.
+      const user = await tx.user.create({
+        data: { email: invite.email, name, passwordHash },
+      });
+
+      // Tenant-scoped create bootstrap exception (src/lib/db.ts's
+      // documented exception for create/createMany outside withTenant()),
+      // same shape as registerAction's very first Membership:
+      // organizationId is supplied explicitly, and Postgres RLS's WITH
+      // CHECK against app.current_org_id (set above) is what actually
+      // enforces it lands in the right organization.
+      await tx.membership.create({
+        data: { userId: user.id, organizationId: invite.organizationId, role: invite.role },
+      });
+
+      // REQ-010, REQ-012: raw SQL, not tx.invite.updateMany. `Invite` is
+      // tenant-scoped and this transaction never entered withTenant()'s
+      // AsyncLocalStorage scope (see doc comment above), so the extension
+      // in src/lib/db.ts would reject a model-method call here regardless
+      // of an explicit organizationId (that bootstrap exception only
+      // covers create/createMany, not updateMany). This one conditional
+      // UPDATE both re-checks "still pending" at commit time and performs
+      // the write atomically: whichever of a racing revoke/accept commits
+      // first changes the row, so the loser's WHERE matches zero rows.
+      const acceptedCount = await tx.$executeRaw`
+        UPDATE invites
+        SET "acceptedAt" = now()
+        WHERE id = ${invite.id}
+          AND "acceptedAt" IS NULL
+          AND "revokedAt" IS NULL
+          AND "expiresAt" > now()
+      `;
+
+      if (acceptedCount === 0) {
+        // Rolls back the User/Membership created above too.
+        throw new InviteNoLongerPendingError();
+      }
+    });
+  } catch (error) {
+    if (error instanceof InviteNoLongerPendingError) {
+      return { success: false, error: GENERIC_INVALID_INVITE_ERROR };
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return { success: false, error: GENERIC_EMAIL_TAKEN_ERROR };
+    }
+    throw error;
+  }
+
+  return { success: true };
 }

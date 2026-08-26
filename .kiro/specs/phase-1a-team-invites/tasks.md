@@ -22,8 +22,13 @@ Branch: `feat/phase-1a-team-invites`, created by `task-runner` from up-to-date `
 
 - [x] T3.1 Extend `src/validation/team.ts` with the accept-invite schema (name 1 to 100 chars, password min 12 chars). Validation: `pnpm test -- validation`. Closes REQ-007, REQ-008.
 - [x] T3.2 Implement the token lookup half of `acceptInviteAction`: hash the incoming token, set `app.invite_lookup_token_hash`, query the `Invite`, evaluate the derived-pending check (not expired, not revoked, not accepted). Validation: `pnpm test -- invite-lookup`. Closes REQ-006, REQ-013.
-- [ ] T3.3 Implement the HIBP check reusing the same helper as `phase-0-scaffold`'s registration flow. Validation: `pnpm test -- invite-hibp`. Closes REQ-009.
-- [ ] T3.4 Implement the accept transaction: re-check pending at commit time, create `User` + `Membership` (role from the invite), conditional `updateMany` on the `Invite` setting `acceptedAt`, handling a zero-rows-affected result as the same generic error as REQ-013. Validation: `pnpm test -- accept-invite`. Closes REQ-010, REQ-012.
+- [x] T3.3 Implement the HIBP check reusing the same helper as `phase-0-scaffold`'s registration flow. Validation: `pnpm test -- invite-hibp`. Closes REQ-009.
+- [x] T3.4 Implement the accept transaction: re-check pending at commit time, create `User` + `Membership` (role from the invite), conditional `updateMany` on the `Invite` setting `acceptedAt`, handling a zero-rows-affected result as the same generic error as REQ-013. Validation: `pnpm test -- accept-invite`. Closes REQ-010, REQ-012.
+  <!-- Deviation: T3.3 and T3.4 share one commit. REQ-009's HIBP check gates
+  entry into REQ-010's create transaction inside the same acceptInviteAction
+  function -- there is no meaningful intermediate state where one exists
+  without the other, so they were implemented together. Each task still has
+  its own dedicated test file and both validation commands pass independently. -->
 - [ ] T3.5 Concurrency test: two simultaneous accept requests for the same invite/email, confirming exactly one succeeds and the loser gets the generic error, no duplicate `User`. Validation: `pnpm test -- accept-invite-race`. Closes REQ-011.
 - [ ] T3.6 Concurrency test: a revoke and an accept racing on the same invite, confirming exactly one wins per REQ-012's rule. Validation: `pnpm test -- revoke-accept-race`. Closes REQ-012.
 - [ ] T3.7 Build `src/app/(auth)/invite/[token]/page.tsx`: the accept form, wired to `acceptInviteAction`, showing the invited email read-only and the generic error for any invalid-token case. Validation: `pnpm test:e2e -- accept-invite`.
