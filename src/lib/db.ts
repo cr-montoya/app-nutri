@@ -111,6 +111,8 @@ function createBaseClient() {
   return new PrismaClient(url ? { datasourceUrl: url } : undefined);
 }
 
+const CREATE_OPERATIONS = new Set(["create", "createMany"]);
+
 function extendWithTenantContext(client: PrismaClient) {
   return client.$extends({
     name: "tenant-context",
@@ -123,6 +125,30 @@ function extendWithTenantContext(client: PrismaClient) {
 
           const context = tenantStorage.getStore();
           if (!context) {
+            // `create`/`createMany` are the one documented exception: the
+            // Prisma schema already requires `organizationId` as a scalar
+            // field on both tenant-scoped models, so TypeScript refuses to
+            // compile a create call that omits it, and this is the only
+            // path a new organization's very first Membership can be
+            // created on (registerAction, T4.2) -- there is no existing
+            // tenant session to derive a context from yet. Every other
+            // operation (reads, updates, deletes) has no such bootstrap
+            // case and always requires withTenant().
+            if (CREATE_OPERATIONS.has(operation)) {
+              const data = (args as QueryArgs | undefined)?.data;
+              const rows = Array.isArray(data) ? data : [data];
+              const missingOrgId = rows.some(
+                (row) => !(row as QueryArgs | undefined)?.organizationId
+              );
+              if (missingOrgId) {
+                throw new Error(
+                  `Tenant-scoped model "${model}" created outside withTenant() must set organizationId explicitly. ` +
+                    "See .agents/rules/tenant-isolation.md."
+                );
+              }
+              return query(args);
+            }
+
             throw new Error(
               `Tenant-scoped model "${model}" was queried outside withTenant(). ` +
                 "See .agents/rules/tenant-isolation.md."
@@ -169,6 +195,15 @@ export async function withTenant<T>(
 ): Promise<T> {
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('app.current_org_id', ${context.organizationId}, true)`;
-    return tenantStorage.run(context, () => callback(tx as unknown as TenantScopedClient));
+    // `callback` is awaited *inside* `run()`, not merely returned from it:
+    // Prisma's query methods return a lazily-executed thenable that only
+    // dispatches (and only then reaches the extension's $allOperations
+    // below) once awaited. Returning that thenable from `run()` without
+    // awaiting it would let the eventual `.then()` fire outside the
+    // AsyncLocalStorage scope, so `tenantStorage.getStore()` would see
+    // nothing by the time the extension runs.
+    return tenantStorage.run(context, async () => {
+      return await callback(tx as unknown as TenantScopedClient);
+    });
   });
 }
