@@ -1,4 +1,5 @@
 import type { Role } from "@prisma/client";
+import { withTenant } from "@/lib/db";
 
 /**
  * Role guard used in Server Actions/Route Handlers, never only to hide UI
@@ -47,4 +48,21 @@ export function requireRole<T extends RoleCheckable>(
   }
 
   return actor;
+}
+
+/**
+ * Resolves the caller's own `Membership` (never a client-supplied id) for
+ * `session`'s org, via `withTenant`. Plain module, not a Server Action, so
+ * both `src/server/actions/team.ts`'s Server Actions and the `team/*`
+ * Server Components can call it directly -- a `"use server"` file may only
+ * export async functions, so this couldn't live there and be imported by a
+ * Server Component (code-quality finding, phase-1a-team-invites
+ * remediation: this replaced three independent, hand-duplicated copies of
+ * the same `tx.membership.findUnique` + `withTenant` call).
+ */
+export async function getOwnMembership(session: { organizationId: string; user: { id: string } }) {
+  return withTenant(
+    { organizationId: session.organizationId, userId: session.user.id },
+    (tx) => tx.membership.findUnique({ where: { userId: session.user.id } })
+  );
 }

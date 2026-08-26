@@ -24,6 +24,7 @@ model Organization {
   createdAt DateTime @default(now())
 
   memberships Membership[]
+  invites     Invite[]
 
   @@map("organizations")
 }
@@ -68,4 +69,21 @@ model Professional {
 
   @@index([organizationId])
   @@map("professionals")
+}
+
+model Invite {
+  id             String    @id @default(cuid())
+  organizationId String
+  email          String
+  role           Role
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("invites")
 }

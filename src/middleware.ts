@@ -23,7 +23,14 @@ const PUBLIC_PATHS = new Set(["/", "/login", "/register"]);
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
-  const isPublic = PUBLIC_PATHS.has(pathname) || pathname.startsWith("/api/auth");
+  // `/invite/[token]` (phase-1a-team-invites, T3.7) is a dynamic path, so it
+  // can't be listed in the exact-match PUBLIC_PATHS set above; it must be
+  // public since a visitor accepting an invite has no session yet -- that's
+  // the entire point of the flow (ADR-0002).
+  const isPublic =
+    PUBLIC_PATHS.has(pathname) ||
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/invite/");
 
   if (!isPublic && !req.auth) {
     const loginUrl = new URL("/login", req.nextUrl);

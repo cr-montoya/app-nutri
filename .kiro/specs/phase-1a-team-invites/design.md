@@ -116,4 +116,5 @@ Reused from `phase-0-scaffold`: `withTenant`, the RLS policy shape (extended, no
 
 ## Deviations
 
-None yet; this section is for `spec-closeout` to fill in if implementation diverges from this design.
+- **T3.3 and T3.4 were implemented together in one commit (`677114d`)** rather than as two separate commits. REQ-009's HIBP check gates entry into REQ-010's accept transaction, and there is no meaningful intermediate state where one exists without the other, so splitting them into separate commits would not have reflected a real intermediate milestone.
+- **T3.7 required a small, necessary fix to `src/middleware.ts`'s `PUBLIC_PATHS` check**, adding a `pathname.startsWith("/invite/")` branch, not explicitly listed in `tasks.md`. Without it, the invite-accept route would not be reachable by an unauthenticated visitor at all, which is the entire point of the flow (ADR-0002).
