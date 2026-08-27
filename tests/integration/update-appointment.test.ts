@@ -24,14 +24,29 @@ let professional: { id: string };
 let otherProfessional: { id: string };
 let patient: { id: string };
 
+// beforeEach below runs once per test case (this file uses it.each in
+// several places), each time creating a fresh org/user/professional/
+// patient. Every id is tracked here so afterAll can clean up every test
+// case's fixtures, not just whichever one happened to run last -- same
+// array-accumulation pattern as tests/integration/register-action.test.ts's
+// `createdEmails`. Without this, only the last test's org/user/etc. were
+// ever deleted and every earlier test case's rows leaked permanently (the
+// "rejects a professional belonging to a different organization" test's
+// own otherOrg/otherOrgUser fixtures are already self-cleaned at the end of
+// that test, so they're not tracked here).
+const orgIds: string[] = [];
+const userIds: string[] = [];
+
 beforeEach(async () => {
   vi.clearAllMocks();
   org = await adminDb.organization.create({
     data: { name: `Update Appointment Org ${runId}`, slug: `update-appointment-org-${runId}-${Math.random()}` },
   });
+  orgIds.push(org.id);
   user = await adminDb.user.create({
     data: { email: `update-appointment-${runId}-${Math.random()}@example.test`, passwordHash: "x", name: "Actor" },
   });
+  userIds.push(user.id);
   const membership = await adminDb.membership.create({
     data: { userId: user.id, organizationId: org.id, role: "FRONT_DESK" },
   });
@@ -41,6 +56,7 @@ beforeEach(async () => {
   const otherUser = await adminDb.user.create({
     data: { email: `update-appointment-other-${runId}-${Math.random()}@example.test`, passwordHash: "x", name: "Other" },
   });
+  userIds.push(otherUser.id);
   const otherMembership = await adminDb.membership.create({
     data: { userId: otherUser.id, organizationId: org.id, role: "NUTRITIONIST" },
   });
@@ -55,11 +71,12 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  await adminDb.appointment.deleteMany({ where: { organizationId: org?.id } });
-  await adminDb.patient.deleteMany({ where: { organizationId: org?.id } });
-  await adminDb.professional.deleteMany({ where: { organizationId: org?.id } });
-  await adminDb.membership.deleteMany({ where: { organizationId: org?.id } });
-  await adminDb.organization.deleteMany({ where: { id: org?.id } });
+  await adminDb.appointment.deleteMany({ where: { organizationId: { in: orgIds } } });
+  await adminDb.patient.deleteMany({ where: { organizationId: { in: orgIds } } });
+  await adminDb.professional.deleteMany({ where: { organizationId: { in: orgIds } } });
+  await adminDb.membership.deleteMany({ where: { organizationId: { in: orgIds } } });
+  await adminDb.user.deleteMany({ where: { id: { in: userIds } } });
+  await adminDb.organization.deleteMany({ where: { id: { in: orgIds } } });
   await adminDb.$disconnect();
 });
 

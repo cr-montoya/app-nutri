@@ -161,13 +161,19 @@ model Appointment {
   @@index([organizationId])
   @@index([organizationId, patientId])
   @@index([professionalId, startAt])
-  // appointments_org_range_gist_idx (organizationId + tsrange(startAt, endAt),
-  // USING gist) serves getAppointmentsForRangeAction's range-overlap query.
-  // Not declared as a Prisma @@index: it's an expression index over a
-  // function call, which Prisma's index DSL can't represent (same reason
-  // the no_overlapping_active_appointments EXCLUDE constraint above has no
-  // Prisma-level declaration either). Created via raw SQL in
-  // prisma/migrations/20260827134041_add_appointment_org_patient_index_and_range_gist/migration.sql.
+  // Serves getAppointmentsForRangeAction's range-overlap query
+  // (organizationId + startAt/endAt comparisons). A prior GiST expression
+  // index (organizationId + tsrange(startAt, endAt)) was tried here and
+  // removed in prisma/migrations/20260827142542_replace_appointment_gist_with_btree_index:
+  // Postgres can only use an expression index when the query literally
+  // contains that expression, and Prisma's `findMany` emits separate
+  // `startAt < ? AND endAt > ?` comparisons, not a `tsrange(...) &&
+  // tsrange(...)` clause -- so the GiST index was never actually chosen by
+  // the planner (confirmed empirically at 280k synthetic rows: seq scan,
+  // 29ms, 5863 buffers). This plain composite btree matches the query's
+  // real shape and is picked up immediately with no application-code
+  // change (confirmed: bitmap heap scan, 0.5ms, at both 50k and 280k rows).
+  @@index([organizationId, startAt])
   @@map("appointments")
 }
 
