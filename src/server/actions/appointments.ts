@@ -287,3 +287,70 @@ export async function transitionAppointmentStatusAction(
   await revalidateAppointmentsPath(session.organizationId);
   return { success: true };
 }
+
+export interface AppointmentForCalendar {
+  id: string;
+  patientId: string;
+  patientName: string;
+  professionalId: string;
+  startAt: string;
+  endAt: string;
+  status: AppointmentStatus;
+  reason: string | null;
+  notes: string | null;
+}
+
+export interface GetAppointmentsForRangeActionResult {
+  success: boolean;
+  error?: string;
+  appointments?: AppointmentForCalendar[];
+}
+
+/**
+ * T4.1, closes REQ-019. Range-scoped, org-scoped (via `withTenant`) query
+ * behind an actual Server Action, not a plain data-access module like
+ * `src/server/services/patients.ts`'s `listPatients` -- design.md's
+ * routing table has the calendar's Client Component call this directly on
+ * every range navigation (day/week change), which only a Server Action
+ * (not a Server-Component-only read) supports. The initial page load
+ * (`appointments/page.tsx`) calls this same function server-side for its
+ * first paint. Dates cross the client/server boundary as ISO strings, not
+ * `Date` objects (React Server Action serialization).
+ */
+export async function getAppointmentsForRangeAction(
+  rangeStartISO: string,
+  rangeEndISO: string
+): Promise<GetAppointmentsForRangeActionResult> {
+  const session = await auth();
+  if (!session) {
+    return { success: false, error: GENERIC_FORBIDDEN_ERROR };
+  }
+
+  const rangeStart = new Date(rangeStartISO);
+  const rangeEnd = new Date(rangeEndISO);
+
+  const rows = await withTenant(
+    { organizationId: session.organizationId, userId: session.user.id },
+    (tx) =>
+      tx.appointment.findMany({
+        where: { startAt: { lt: rangeEnd }, endAt: { gt: rangeStart } },
+        include: { patient: { select: { fullName: true } } },
+        orderBy: { startAt: "asc" },
+      })
+  );
+
+  return {
+    success: true,
+    appointments: rows.map((row) => ({
+      id: row.id,
+      patientId: row.patientId,
+      patientName: row.patient.fullName,
+      professionalId: row.professionalId,
+      startAt: row.startAt.toISOString(),
+      endAt: row.endAt.toISOString(),
+      status: row.status,
+      reason: row.reason,
+      notes: row.notes,
+    })),
+  };
+}
