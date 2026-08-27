@@ -72,10 +72,20 @@ export interface ResolvedAppointmentRange {
  * created or updated -- REQ-003/REQ-004 only require the rejection happen
  * before persistence, not that it live inside the Zod schema itself (same
  * convention as `src/validation/patients.ts`'s `parseBirthDate`).
+ *
+ * `checkPast` (REQ-004) defaults to on for `createAppointmentAction`, but
+ * `updateAppointmentAction` passes `false`: REQ-011 lists exactly which
+ * requirements an edit re-validates ("REQ-003 and REQ-006 through
+ * REQ-010"), deliberately not REQ-004 -- an appointment whose original
+ * `startAt` has since slipped into the past (the normal case for editing
+ * an appointment scheduled earlier the same day) must still be editable
+ * (reason, notes, status), not permanently locked out by a check meant for
+ * new submissions.
  */
 export function resolveAppointmentRange(
   fields: Pick<AppointmentFieldsInput, "date" | "time" | "durationMinutes">,
-  now: Date = new Date()
+  now: Date = new Date(),
+  checkPast = true
 ): ResolvedAppointmentRange {
   const [year, month, day] = fields.date.split("-").map(Number);
   const [hour, minute] = fields.time.split(":").map(Number);
@@ -85,7 +95,7 @@ export function resolveAppointmentRange(
     return { error: GENERIC_APPOINTMENT_VALIDATION_ERROR };
   }
 
-  if (startAt < now) {
+  if (checkPast && startAt < now) {
     return { error: GENERIC_PAST_START_ERROR };
   }
 

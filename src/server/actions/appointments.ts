@@ -179,7 +179,10 @@ export async function updateAppointmentAction(
   }
   const data = parsed.data;
 
-  const range = resolveAppointmentRange(data);
+  // REQ-011 re-validates REQ-003 and REQ-006 through REQ-010, deliberately
+  // not REQ-004: an appointment scheduled earlier the same day must stay
+  // editable even after its startAt has slipped into the past.
+  const range = resolveAppointmentRange(data, new Date(), false);
   if (range.error) {
     return { success: false, error: range.error };
   }
