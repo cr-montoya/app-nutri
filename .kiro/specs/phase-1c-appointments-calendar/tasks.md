@@ -37,7 +37,7 @@ Branch: `feat/phase-1c-appointments-calendar`, created by `task-runner` from up-
 
 ## T5: End-to-end proof
 
-- [ ] T5.1 Playwright E2E: as `FRONT_DESK`, schedule an appointment for a patient with a professional; attempt a second, overlapping appointment for the same professional and confirm it's rejected with a visible reason; confirm the first appointment (SCHEDULED → CONFIRMED → COMPLETED) via the detail sheet's contextual controls; create and cancel a second appointment (SCHEDULED → CANCELLED); confirm a cancelled or completed appointment can't be rescheduled or re-transitioned, by drag and by the detail sheet; confirm an empty day shows the empty state; confirm status is visually distinguishable by icon/label, not color alone. Validation: `pnpm test:e2e -- appointments-e2e`. Confirms REQ-001 through REQ-027 hold end to end (REQ-028 touch-target sizing is a manual, non-automatable check, covered by T4.9 instead).
+- [x] T5.1 Playwright E2E: as `FRONT_DESK`, schedule an appointment for a patient with a professional; attempt a second, overlapping appointment for the same professional and confirm it's rejected with a visible reason; confirm the first appointment (SCHEDULED → CONFIRMED → COMPLETED) via the detail sheet's contextual controls; create and cancel a second appointment (SCHEDULED → CANCELLED); confirm a cancelled or completed appointment can't be rescheduled or re-transitioned, by drag and by the detail sheet; confirm an empty day shows the empty state; confirm status is visually distinguishable by icon/label, not color alone. Validation: `pnpm test:e2e -- appointments-e2e`. Confirms REQ-001 through REQ-027 hold end to end (REQ-028 touch-target sizing is a manual, non-automatable check, covered by T4.9 instead).
 
 ## After T5.1
 
