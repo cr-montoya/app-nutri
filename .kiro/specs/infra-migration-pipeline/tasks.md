@@ -18,7 +18,7 @@ Operator setup from design.md (`PROD_MIGRATION_DATABASE_URL`, `NEON_API_KEY`, `N
 
 ## T3: Operator setup
 
-- [BLOCKED] T3.1 Confirm the two GitHub Actions secrets and three repository variables documented in design.md exist, without printing their values. Validation: `gh secret list | rg -q '^PROD_MIGRATION_DATABASE_URL' && gh secret list | rg -q '^NEON_API_KEY' && gh variable list | rg -q '^NEON_PROJECT_ID' && gh variable list | rg -q '^NEON_MIGRATION_ROLE_NAME' && gh variable list | rg -q '^NEON_DATABASE_NAME'`. Blocked: waiting for the operator to provision the two secrets and three variables. Closes REQ-005, REQ-006.
+- [x] T3.1 Confirm the two GitHub Actions secrets and three repository variables documented in design.md exist, without printing their values. Validation: `gh secret list | rg -q '^PROD_MIGRATION_DATABASE_URL' && gh secret list | rg -q '^NEON_API_KEY' && gh variable list | rg -q '^NEON_PROJECT_ID' && gh variable list | rg -q '^NEON_MIGRATION_ROLE_NAME' && gh variable list | rg -q '^NEON_DATABASE_NAME'`. Closes REQ-005, REQ-006.
 
 ## T4: Live workflow verification
 
