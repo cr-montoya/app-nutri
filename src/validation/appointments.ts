@@ -115,3 +115,17 @@ export function formatBogotaDateAndTime(instant: Date): { date: string; time: st
   const time = `${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}`;
   return { date, time };
 }
+
+/**
+ * Returns the [start, end) UTC instants of "today" in America/Bogota,
+ * containing `now`. Used by `appointments/page.tsx`'s Server Component
+ * shell for its default landing range (design.md: "the initial visible
+ * day's appointments").
+ */
+export function getBogotaDayRange(now: Date = new Date()): { start: Date; end: Date } {
+  const { date } = formatBogotaDateAndTime(now);
+  const [year, month, day] = date.split("-").map(Number);
+  const start = new Date(Date.UTC(year, month - 1, day, BOGOTA_UTC_OFFSET_HOURS, 0));
+  const end = new Date(start.getTime() + 24 * 60 * 60_000);
+  return { start, end };
+}
