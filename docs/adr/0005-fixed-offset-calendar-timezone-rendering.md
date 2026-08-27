@@ -25,7 +25,7 @@ Render the calendar with FullCalendar's built-in `timeZone="UTC"` (not `"local"`
 
 ## Consequences
 
-Easier: no new dependency, no bundle-size increase, the fix is confined to one file and is a small, well-commented, testable transformation (verified by `tests/e2e/calendar-drag-reschedule.spec.ts` computing exact pixel-to-time math against it). Harder: the offset (5 hours) is a literal constant duplicated conceptually between `src/validation/appointments.ts`'s `BOGOTA_UTC_OFFSET_HOURS` and `calendar.tsx`'s own shift -- acceptable for now since both already exist to serve REQ-005's single fixed-offset requirement, but a second, unrelated place a future daylight-saving or multi-timezone requirement would need to touch. This decision forecloses nothing: the pre-shift is removable in one file the day a real multi-timezone phase adopts `@fullcalendar/moment-timezone` or replaces FullCalendar's timezone handling entirely.
+Easier: no new dependency, no bundle-size increase, the fix is confined to one file and is a small, well-commented, testable transformation (verified by `tests/e2e/calendar-drag-reschedule.spec.ts` computing exact pixel-to-time math against it). `calendar.tsx` imports `BOGOTA_UTC_OFFSET_HOURS` from `src/validation/appointments.ts` rather than redeclaring the offset, so the fixed 5-hour constant has exactly one definition, not two. This decision forecloses nothing: the pre-shift is removable in one file the day a real multi-timezone phase adopts `@fullcalendar/moment-timezone` or replaces FullCalendar's timezone handling entirely.
 
 ## Related
 

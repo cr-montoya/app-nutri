@@ -16,7 +16,7 @@ import type {
 import { cn } from "@/lib/utils";
 import { updateAppointmentAction, getAppointmentsForRangeAction } from "@/server/actions/appointments";
 import type { AppointmentForCalendar } from "@/server/actions/appointments";
-import { formatBogotaDateAndTime } from "@/validation/appointments";
+import { formatBogotaDateAndTime, BOGOTA_UTC_OFFSET_HOURS } from "@/validation/appointments";
 import { statusMeta } from "./status-meta";
 import { AppointmentDetailSheet } from "./appointment-detail-sheet";
 
@@ -52,7 +52,7 @@ export interface CalendarProps {
 // is shifted by this fixed offset and declared `timeZone="UTC"` below, so
 // FullCalendar's grid, navigation, and drag positions all read as true
 // Bogota wall-clock time while every other file keeps working in real UTC.
-const BOGOTA_OFFSET_MS = 5 * 60 * 60_000;
+const BOGOTA_OFFSET_MS = BOGOTA_UTC_OFFSET_HOURS * 60 * 60_000;
 const toDisplayInstant = (real: Date) => new Date(real.getTime() - BOGOTA_OFFSET_MS);
 const toRealInstant = (display: Date) => new Date(display.getTime() + BOGOTA_OFFSET_MS);
 

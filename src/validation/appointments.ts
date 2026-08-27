@@ -54,8 +54,10 @@ const MAX_DURATION_MINUTES = 480;
 
 // REQ-005: America/Bogota is UTC-5 year-round (no daylight saving), fixed
 // for this phase (multi-timezone support is explicitly out of scope). A
-// Bogota wall-clock instant converts to UTC by adding this offset.
-const BOGOTA_UTC_OFFSET_HOURS = 5;
+// Bogota wall-clock instant converts to UTC by adding this offset. Exported
+// so calendar.tsx's ADR-0005 display-instant shift reuses this single
+// definition instead of redeclaring the same constant.
+export const BOGOTA_UTC_OFFSET_HOURS = 5;
 
 export interface ResolvedAppointmentRange {
   startAt?: Date;
