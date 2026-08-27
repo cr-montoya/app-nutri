@@ -17,6 +17,11 @@ enum Role {
   FRONT_DESK
 }
 
+enum Sex {
+  MALE
+  FEMALE
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
@@ -25,6 +30,8 @@ model Organization {
 
   memberships Membership[]
   invites     Invite[]
+  patients    Patient[]
+  auditLogs   AuditLog[]
 
   @@map("organizations")
 }
@@ -38,6 +45,7 @@ model User {
   createdAt    DateTime @default(now())
 
   membership Membership?
+  auditLogs  AuditLog[]
 
   @@map("users")
 }
@@ -86,4 +94,51 @@ model Invite {
 
   @@index([organizationId])
   @@map("invites")
+}
+
+model Patient {
+  id             String    @id @default(cuid())
+  organizationId String
+  fullName       String
+  phone          String
+  documentId     String?
+  birthDate      DateTime?
+  sex            Sex?
+  email          String?
+  address        String?
+  archivedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, documentId])
+  @@index([organizationId])
+  // GIN/trigram index for REQ-017's case-insensitive partial name search
+  // (prisma/migrations/20260826195957_add_patient_fullname_trgm_index).
+  // Declared here too so `prisma migrate dev`'s schema diff doesn't
+  // propose dropping it on a future migration -- it was created via raw
+  // SQL (`gin_trgm_ops` isn't a Prisma-native operator class keyword), but
+  // this `@@index` tells Prisma's diff engine the index is expected.
+  @@index([fullName(ops: raw("gin_trgm_ops"))], type: Gin, map: "patients_full_name_trgm_idx")
+  @@map("patients")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         String
+  entityType     String
+  entityId       String
+  metadata       Json?
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, entityType, entityId])
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
 }

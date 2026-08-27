@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { logoutAction } from "@/server/actions/session";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ export default async function Home() {
         </form>
       ) : (
         <Button asChild>
-          <a href="/login">Log in</a>
+          <Link href="/login">Log in</Link>
         </Button>
       )}
     </div>

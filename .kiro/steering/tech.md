@@ -7,7 +7,7 @@ Persistent context. Always read before designing a feature's implementation.
 | Area | Choice |
 |---|---|
 | Framework | Next.js 15 (App Router) + TypeScript + RSC |
-| Database | Postgres on Neon (serverless, per-PR branching) |
+| Database | Postgres on Neon (serverless, per-PR branching); `pg_trgm` extension enabled for GIN trigram indexes on case-insensitive partial-match text search (first use: `Patient.fullName`, `phase-1b-patients`) |
 | Package manager | pnpm only, no npm or yarn |
 | ORM | Prisma |
 | Auth | Auth.js v5: Credentials + argon2id, JWT session; optional Google OAuth |
