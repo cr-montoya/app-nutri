@@ -2,7 +2,7 @@
 
 ## Architecture touched
 
-One new tenant-scoped model (`Appointment`), a Postgres exclusion constraint for double-booking prevention (a new pattern for this project), and new routes under `(app)/[orgSlug]/appointments/`. Specialist personas applied: `database-architect.md` (schema, RLS, and specifically the exclusion constraint) and `nextjs-architect.md` (routing, including the one justified Client Component exception for FullCalendar).
+One new tenant-scoped model (`Appointment`), a Postgres exclusion constraint for double-booking prevention (a new pattern for this project), and new routes under `(app)/[orgSlug]/appointments/`. Specialist personas applied: `database-architect.md` (schema, RLS, and specifically the exclusion constraint), `nextjs-architect.md` (routing, including the one justified Client Component exception for FullCalendar), and `design.md` (calendar UX — this is the first spec with a genuinely new visual surface, FullCalendar with drag-and-drop; the persona was applied in a review pass before implementation started, closing REQ-024 through REQ-028 below).
 
 ## Schema (database-architect)
 
@@ -68,12 +68,27 @@ CREATE POLICY tenant_isolation ON appointments
 
 | Route | Rendering | Data fetching | Streaming |
 |---|---|---|---|
-| `(app)/[orgSlug]/appointments/page.tsx` | Server Component shell fetches the initial visible week's appointments; renders a Client Component calendar (FullCalendar) with that data as initial props | Shell: direct fetch for the default range. Subsequent range navigation: `getAppointmentsForRangeAction` Server Action called from the client calendar on range change | No; a week's appointments is a small, fast query |
+| `(app)/[orgSlug]/appointments/page.tsx` | Server Component shell fetches the initial visible **day's** appointments (default landing view, see below); renders a Client Component calendar (FullCalendar) with that data as initial props | Shell: direct fetch for the default range. Subsequent range navigation: `getAppointmentsForRangeAction` Server Action called from the client calendar on range change | No; a day's appointments is a small, fast query |
 | `(app)/[orgSlug]/appointments/new/page.tsx` | Server-rendered shell, Client Component form | `createAppointmentAction` Server Action | No |
 
-The calendar itself is a Client Component, a deliberate, justified exception to the Server-Component default: FullCalendar's drag-and-drop reschedule (REQ-013) requires a browser DOM and JS event handling that cannot run server-side. This is the one Client Component boundary in this spec; the shell around it, the create form's page, and every data fetch stay server-first per the established pattern. Drag-and-drop and the reschedule/status-transition forms all call the same `updateAppointmentAction`/`transitionAppointmentStatusAction` Server Actions, per REQ-013's "dragging submits the same reschedule operation as the form does."
+The calendar itself is a Client Component, a deliberate, justified exception to the Server-Component default: FullCalendar's drag-and-drop reschedule (REQ-013) requires a browser DOM and JS event handling that cannot run server-side. This is the one Client Component boundary in this spec; the shell around it, the create form's page, and every data fetch stay server-first per the established pattern. Drag-and-drop, the detail/edit sheet (below), and the status-transition controls all call the same `updateAppointmentAction`/`transitionAppointmentStatusAction` Server Actions, per REQ-013's "dragging submits the same reschedule operation as the form does" and REQ-024's non-drag equivalent.
 
 `updateAppointmentAction` and `transitionAppointmentStatusAction` revalidate `(app)/[orgSlug]/appointments` via `revalidatePath` on success, scoped narrowly per `nextjs-architect.md`'s guidance.
+
+### Calendar view type (design)
+
+`database-architect.md`'s per-professional resource columns (REQ-019) and a week-wide date range don't compose legibly: a week × N-professional grid is illegible on a laptop, let alone a tablet, well before 3 professionals. The default view is `resourceTimeGridDay` — one day, one column per professional, with prev/next-day navigation — which is what the persona's "columns must stay legible with 3+ professionals" guidance actually requires. A separate, non-resource week/list view (FullCalendar's `listWeek` or `timeGridWeek` without the `resourceTimeGridPlugin`) is available as a secondary toggle for browsing a wider range without per-professional columns; it is not the landing view. REQ-019 itself only requires "a date range," so this is a design-level choice, not a requirements change.
+
+### Calendar UX (design.md persona — REQ-024 through REQ-028)
+
+- **Non-drag reschedule and edit (REQ-011, REQ-024)**: clicking or tapping a calendar event opens `AppointmentDetailSheet` (`src/components/appointments/appointment-detail-sheet.tsx`, a shadcn `Sheet`), reachable by keyboard (`Enter`/`Space` on a focused event, which FullCalendar exposes as a native, tabbable button role). The sheet shows the appointment's fields read-only by default with an "Edit" affordance that reveals the same date/time/duration/professional/reason/notes fields as the create form (reusing `src/validation/appointments.ts`'s schema), submitting to `updateAppointmentAction`. This is the single non-drag path for both REQ-011 (edit) and REQ-024 (reschedule) — the create form's schema/fields are reused, not duplicated.
+- **Status-transition controls (REQ-014 through REQ-017, REQ-026)**: the same sheet renders a contextual set of status-transition buttons, computed from a shared pure function `allowedNextStatuses(current: AppointmentStatus): AppointmentStatus[]` in `src/lib/appointments.ts`. This function is the single source of truth for the allowed-transitions table already described below; the client imports it to render only valid buttons (Hick's Law: never show a transition REQ-017 would reject), and `transitionAppointmentStatusAction` imports the same function server-side to enforce it — the UI hint and the enforcement are the same code, not two definitions that can drift.
+- **Status legibility (REQ-020, REQ-025)**: each calendar event chip and every status-transition button renders a `lucide-react` icon plus a short text label per status, in addition to the existing color/opacity treatment — color is reinforcement, never the only channel. Mapping: `SCHEDULED` — default outline, `Clock` icon; `CONFIRMED` — solid, `CheckCircle2` icon; `COMPLETED` — muted fill, `Check` icon; `CANCELLED` — muted fill, `X` icon, strikethrough label; `NO_SHOW` — muted fill, `AlertTriangle` icon. All five are in `lucide-react`, already a dependency; no new package needed.
+- **Rejection feedback (REQ-026)**: this codebase has no toast primitive (checked: no `sonner`/toast dependency, no existing usage); the established pattern, used identically in `phase-1a-team-invites`'s `invite-form.tsx` and `professional-profile-form.tsx`, is a local `serverError`/`dragError` state rendered as inline `<p className="text-sm text-destructive">`. The calendar reuses that pattern rather than introducing a new UI primitive: on a rejected drag, FullCalendar's `eventDrop` handler calls `info.revert()` and sets a `dragError` string rendered just above the calendar. On a rejected edit/reschedule/status-transition from the sheet, the same inline-error pattern renders inside the sheet.
+- **Empty state (REQ-027)**: when `getAppointmentsForRangeAction`'s result for the current range is empty, the calendar shell renders "No appointments scheduled" centered over the grid instead of leaving it blank.
+- **Loading state**: FullCalendar's native `loading` callback drives a skeleton overlay on the grid during `getAppointmentsForRangeAction` calls triggered by day/range navigation, so navigating never shows a frozen or silently-stale grid.
+- **Pre-filled create from an empty slot click**: clicking an empty calendar slot navigates to `new/page.tsx?date=&time=&professionalId=`, pre-filling those three fields in the create form (still a full navigation, consistent with `patients/new`'s existing pattern elsewhere in the app; only the re-entry cost of already-known values is removed, not the route boundary itself).
+- **Touch targets (REQ-028) and touch drag**: calendar event chips and every status-transition button meet the 44×44px minimum hit area REQ-028 requires, verified with 3 or more professional columns at typical laptop/tablet viewport widths. FullCalendar's touch `longPressDelay` is tuned away from the default so a tablet's scroll gesture doesn't fight a drag attempt; the exact delay value is a task-level implementation detail (unlike hit-area size, no specific value is behavior-mandated by a requirement), verified by a manual tablet-viewport check rather than an automated assertion.
 
 ## Status transition and race handling
 
@@ -120,6 +135,11 @@ The allowed-transitions table (REQ-014/REQ-015/REQ-016) is checked in applicatio
 | REQ-021 | `withTenant` on every `Appointment` read/write |
 | REQ-022 | RLS policy above |
 | REQ-023 | No `requireRole` call restricts any `Appointment` action; consistent with `phase-1b-patients`'s REQ-023 precedent for actions `plan.md` §6 grants to all three roles |
+| REQ-024 | `AppointmentDetailSheet`'s edit affordance, calling `updateAppointmentAction` — the non-drag reschedule path, same validation as REQ-011/REQ-012 |
+| REQ-025 | Icon + text label per `AppointmentStatus`, in addition to color/opacity, on event chips and status-transition buttons |
+| REQ-026 | `dragError`/`serverError` inline-message pattern (reused from `phase-1a-team-invites`) plus `info.revert()` on a rejected drag |
+| REQ-027 | Calendar shell's empty-range check on `getAppointmentsForRangeAction`'s result |
+| REQ-028 | 44×44px minimum hit area on event chips and status-transition/edit-sheet buttons, verified manually with 3+ professional columns |
 
 ## Multi-tenant isolation and RBAC impact
 
@@ -133,14 +153,21 @@ prisma/migrations/.../migration.sql                          # generated; includ
 src/validation/appointments.ts                                # new: Zod schemas, duration/timezone handling
 src/server/actions/appointments.ts                             # new: createAppointmentAction, updateAppointmentAction, transitionAppointmentStatusAction, getAppointmentsForRangeAction
 src/app/(app)/[orgSlug]/appointments/page.tsx                  # new: shell + Client Component calendar
-src/app/(app)/[orgSlug]/appointments/new/page.tsx               # new
-src/components/appointments/calendar.tsx                         # new: Client Component, FullCalendar wrapper with resource columns and drag handling
+src/app/(app)/[orgSlug]/appointments/new/page.tsx               # new: create form, reads ?date=&time=&professionalId= for pre-fill
+src/components/appointments/calendar.tsx                         # new: Client Component, FullCalendar wrapper (resourceTimeGridDay default), status icons, drag handling + revert-on-reject, loading state, empty state
+src/components/ui/sheet.tsx                                         # new: shadcn Sheet primitive (via shadcn CLI; no new dependency, radix-ui/@base-ui/react already installed)
+src/components/appointments/appointment-detail-sheet.tsx          # new: composite built on the Sheet primitive above — view, edit (REQ-011/REQ-024), and status-transition (REQ-014-017) UI
+src/lib/appointments.ts                                            # new: allowedNextStatuses(), shared source of truth for client display + server enforcement
 ```
 
 ## Reused vs. new
 
-Reused: `withTenant`, the RLS policy shape, the Server Action + Zod validation pattern, the `(app)/[orgSlug]/*` route convention, `revalidatePath` scoping, the conditional-update-for-race-safety pattern (first used in `phase-1a-team-invites`'s revoke-vs-accept race, REQ-012 there). New: the `Appointment` model, the Postgres `EXCLUDE` constraint pattern (first use of `btree_gist` in this project), the calendar's one deliberate Client Component boundary, and the timezone-boundary convention (`America/Bogota` at the edges, UTC in storage) that later phases touching dates should follow rather than reinvent.
+Reused: `withTenant`, the RLS policy shape, the Server Action + Zod validation pattern, the `(app)/[orgSlug]/*` route convention, `revalidatePath` scoping, the conditional-update-for-race-safety pattern (first used in `phase-1a-team-invites`'s revoke-vs-accept race, REQ-012 there), and the inline `serverError`-text error pattern from `invite-form.tsx`/`professional-profile-form.tsx` (reused for `dragError` rather than introducing a toast library). New: the `Appointment` model, the Postgres `EXCLUDE` constraint pattern (first use of `btree_gist` in this project), the calendar's one deliberate Client Component boundary, the timezone-boundary convention (`America/Bogota` at the edges, UTC in storage) that later phases touching dates should follow rather than reinvent, and `AppointmentDetailSheet` as this project's first shadcn `Sheet` usage.
 
 ## Deviations
 
 None yet; this section is for `spec-closeout` to fill in if implementation diverges from this design.
+
+## Amendment history
+
+A `design` persona audit (2026-08-27) was run against the original draft before any implementation started, finding three Critical (REQ-013's drag had no non-drag equivalent — WCAG 2.5.7; status shown by color/opacity only — WCAG 1.4.1; no specified feedback on a rejected drag), three High (unresolved week-vs-resource-columns view type; no pre-fill from a clicked slot; no UI surface for status transitions), and three Medium findings (no loading state; no touch-target sizing constraint; no touch-drag tuning noted), plus three requirements-level gaps. `requirements.md` gained REQ-024 through REQ-028 (REQ-028, touch-target sizing, added during the `spec-grill` pass on this amendment for consistency with REQ-025/REQ-027's treatment of the persona's other accessibility findings); this document was amended to close all findings before Phase 3 (`tasks.md`) proceeds.
