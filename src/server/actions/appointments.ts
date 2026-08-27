@@ -1,6 +1,6 @@
 "use server";
 
-import { Prisma, type AppointmentStatus } from "@prisma/client";
+import { AppointmentStatus, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db, withTenant } from "@/lib/db";
@@ -31,6 +31,13 @@ const GENERIC_FORBIDDEN_ERROR = "You must be signed in to do that.";
 // Postgres error embedded in the message. Confirmed empirically (see
 // tests/integration/create-appointment.test.ts's double-booking case)
 // rather than assumed from Prisma's documented known-error-code list.
+// Must match the constraint name literally, on both sides: defined in
+// prisma/migrations/20260827022943_appointments_exclusion_and_rls/migration.sql
+// ("ADD CONSTRAINT no_overlapping_active_appointments EXCLUDE USING gist
+// (...)"). This string match is the only viable detection (see the comment
+// above) -- there's no dedicated Prisma error code to key off instead -- so
+// renaming the constraint in that migration file without updating this
+// constant silently breaks conflict detection with no compile-time signal.
 const EXCLUSION_CONSTRAINT_NAME = "no_overlapping_active_appointments";
 
 /**
@@ -191,17 +198,16 @@ export async function updateAppointmentAction(
     await withTenant(
       { organizationId: session.organizationId, userId: session.user.id },
       async (tx) => {
-        const existing = await tx.appointment.findUnique({ where: { id: appointmentId } });
+        const [existing, professional] = await Promise.all([
+          tx.appointment.findUnique({ where: { id: appointmentId } }),
+          tx.professional.findUnique({ where: { id: data.professionalId } }),
+        ]);
         if (!existing) {
           throw new AppointmentNotFoundError();
         }
         if (!EDITABLE_STATUSES.includes(existing.status)) {
           throw new InvalidStatusForEditError();
         }
-
-        const professional = await tx.professional.findUnique({
-          where: { id: data.professionalId },
-        });
         if (!professional) {
           throw new PatientOrProfessionalNotFoundError();
         }
@@ -260,6 +266,26 @@ const GENERIC_STATUS_ALREADY_CHANGED_ERROR =
  * is checked before the update even runs (REQ-017), the same function the
  * detail sheet's status buttons (T4.6) use to decide what to render.
  */
+const APPOINTMENT_STATUS_VALUES = Object.values(AppointmentStatus);
+
+/**
+ * Runtime guard for `expectedCurrentStatus`/`newStatus`, consistent with
+ * `createAppointmentAction`/`updateAppointmentAction`'s `safeParse`-first
+ * convention: both those actions validate `input: unknown` with Zod before
+ * doing anything else, but this action's two parameters are typed
+ * `AppointmentStatus` at the TypeScript level only -- nothing stops a
+ * caller (or a stale/tampered client bundle) from passing a value outside
+ * the enum at runtime. Without this check, an out-of-enum
+ * `expectedCurrentStatus` falls through `allowedNextStatuses`'s switch
+ * (src/lib/appointments.ts, no `default` case) as `undefined`, and
+ * `undefined.includes(newStatus)` throws an unhandled `TypeError` instead
+ * of returning the same generic rejection the other actions use for
+ * invalid input.
+ */
+function isAppointmentStatus(value: unknown): value is AppointmentStatus {
+  return typeof value === "string" && (APPOINTMENT_STATUS_VALUES as string[]).includes(value);
+}
+
 export async function transitionAppointmentStatusAction(
   appointmentId: string,
   expectedCurrentStatus: AppointmentStatus,
@@ -268,6 +294,10 @@ export async function transitionAppointmentStatusAction(
   const session = await auth();
   if (!session) {
     return { success: false, error: GENERIC_FORBIDDEN_ERROR };
+  }
+
+  if (!isAppointmentStatus(expectedCurrentStatus) || !isAppointmentStatus(newStatus)) {
+    return { success: false, error: GENERIC_APPOINTMENT_VALIDATION_ERROR };
   }
 
   if (!allowedNextStatuses(expectedCurrentStatus).includes(newStatus)) {

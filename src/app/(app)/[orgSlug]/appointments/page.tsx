@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
-import { withTenant } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { getBogotaDayRange } from "@/validation/appointments";
 import { getAppointmentsForRangeAction } from "@/server/actions/appointments";
+import { listSchedulingOptions } from "@/server/services/appointments";
 import { Calendar } from "@/components/appointments/calendar";
 
 /**
@@ -28,14 +28,10 @@ export default async function AppointmentsPage({
     notFound();
   }
 
-  const professionals = await withTenant(
-    { organizationId: session.organizationId, userId: session.user.id },
-    (tx) =>
-      tx.professional.findMany({
-        include: { membership: { include: { user: { select: { name: true } } } } },
-        orderBy: { id: "asc" },
-      })
-  );
+  const { professionals } = await listSchedulingOptions({
+    organizationId: session.organizationId,
+    userId: session.user.id,
+  });
 
   const { start, end } = getBogotaDayRange();
   const rangeResult = await getAppointmentsForRangeAction(start.toISOString(), end.toISOString());
@@ -51,10 +47,7 @@ export default async function AppointmentsPage({
 
       <Calendar
         orgSlug={orgSlug}
-        professionals={professionals.map((professional) => ({
-          id: professional.id,
-          displayName: professional.membership.user.name,
-        }))}
+        professionals={professionals}
         initialAppointments={rangeResult.appointments ?? []}
         initialRangeStart={start.toISOString()}
         initialRangeEnd={end.toISOString()}

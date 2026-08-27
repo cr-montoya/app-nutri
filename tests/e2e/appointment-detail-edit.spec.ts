@@ -104,6 +104,33 @@ test("edits an appointment's reason through the detail sheet's non-drag form", a
   expect(updated.reason).toBe("Follow-up consultation");
 });
 
+test("opens the detail sheet via keyboard activation of a focused calendar event (REQ-024, WCAG 2.5.7)", async ({ page }) => {
+  await login(page);
+  await page.goto(`/${orgSlug}/appointments`);
+
+  const eventChip = page.locator(".fc-event", { hasText: "Edit Sheet Patient" }).first();
+  await expect(eventChip).toBeVisible();
+
+  // Focus the event chip directly (calendar.tsx's eventDidMount sets
+  // tabindex="0"/role="button" on it) rather than repeatedly pressing Tab
+  // from the top of the page, which would be brittle against unrelated
+  // focus-order changes elsewhere on the page.
+  await eventChip.focus();
+  await expect(eventChip).toBeFocused();
+
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Edit Sheet Patient" })).toBeVisible();
+
+  // Close and repeat with Space, proving both activation keys work, not
+  // just Enter.
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("heading", { name: "Edit Sheet Patient" })).not.toBeVisible();
+
+  await eventChip.focus();
+  await page.keyboard.press(" ");
+  await expect(page.getByRole("heading", { name: "Edit Sheet Patient" })).toBeVisible();
+});
+
 test("shows the specific rejection reason inline for a double-booking conflict (REQ-026)", async ({ page }) => {
   await login(page);
   await page.goto(`/${orgSlug}/appointments`);

@@ -140,6 +140,12 @@ model Appointment {
   organizationId String
   patientId      String
   professionalId String
+  // ADR-0005: stored digits are UTC clock digits, not Bogota clock digits --
+  // America/Bogota (UTC-5) is applied only at the input/output boundary
+  // (src/validation/appointments.ts's resolveAppointmentRange/
+  // formatBogotaDateAndTime). Any future raw SQL touching these columns
+  // must apply the same offset, not assume the stored value is already
+  // Bogota-local.
   startAt        DateTime
   endAt          DateTime
   status         AppointmentStatus @default(SCHEDULED)
@@ -153,7 +159,15 @@ model Appointment {
   professional Professional @relation(fields: [professionalId], references: [id])
 
   @@index([organizationId])
+  @@index([organizationId, patientId])
   @@index([professionalId, startAt])
+  // appointments_org_range_gist_idx (organizationId + tsrange(startAt, endAt),
+  // USING gist) serves getAppointmentsForRangeAction's range-overlap query.
+  // Not declared as a Prisma @@index: it's an expression index over a
+  // function call, which Prisma's index DSL can't represent (same reason
+  // the no_overlapping_active_appointments EXCLUDE constraint above has no
+  // Prisma-level declaration either). Created via raw SQL in
+  // prisma/migrations/20260827134041_add_appointment_org_patient_index_and_range_gist/migration.sql.
   @@map("appointments")
 }
 

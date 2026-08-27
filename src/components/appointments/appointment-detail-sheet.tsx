@@ -14,7 +14,7 @@ import { allowedNextStatuses } from "@/lib/appointments";
 import { transitionAppointmentStatusAction } from "@/server/actions/appointments";
 import type { AppointmentForCalendar } from "@/server/actions/appointments";
 import { updateAppointmentAction } from "@/server/actions/appointments";
-import { formatBogotaDateAndTime, type CreateAppointmentInput } from "@/validation/appointments";
+import { formatBogotaDateAndTime, type AppointmentFieldsInput } from "@/validation/appointments";
 import { statusMeta } from "./status-meta";
 import { AppointmentForm } from "./appointment-form";
 import type { AppointmentFormProfessional } from "./appointment-form";
@@ -83,7 +83,7 @@ export function AppointmentDetailSheet({
     await onChanged();
   }
 
-  async function handleEditSubmit(values: CreateAppointmentInput) {
+  async function handleEditSubmit(values: AppointmentFieldsInput) {
     if (!appointment) return { success: false, error: "Appointment not found." };
     const result = await updateAppointmentAction(appointment.id, values);
     if (result.success) {

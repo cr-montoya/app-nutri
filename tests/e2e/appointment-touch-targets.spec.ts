@@ -108,6 +108,10 @@ test("calendar event chips and status/edit buttons meet the 44x44px minimum hit 
   const editBox = await editButton.boundingBox();
   expect(editBox).not.toBeNull();
   expect(editBox!.height).toBeGreaterThanOrEqual(MIN_HIT_AREA_PX);
+  // Only height was previously asserted here: a button narrower than 44px
+  // (e.g. an icon-only size-8/32px variant) would have passed undetected
+  // despite REQ-028 requiring a 44x44 hit area, not just 44px tall.
+  expect(editBox!.width).toBeGreaterThanOrEqual(MIN_HIT_AREA_PX);
 
   const statusButtons = page.getByText("Change status").locator("..").getByRole("button");
   const count = await statusButtons.count();
@@ -116,5 +120,6 @@ test("calendar event chips and status/edit buttons meet the 44x44px minimum hit 
     const box = await statusButtons.nth(i).boundingBox();
     expect(box).not.toBeNull();
     expect(box!.height).toBeGreaterThanOrEqual(MIN_HIT_AREA_PX);
+    expect(box!.width).toBeGreaterThanOrEqual(MIN_HIT_AREA_PX);
   }
 });
