@@ -81,7 +81,7 @@ test("creates an appointment through the form and redirects to the calendar", as
   await page.getByLabel("Time").fill("10:00");
   await page.getByRole("button", { name: /create appointment/i }).click();
 
-  await expect(page).toHaveURL(new RegExp(`/${orgSlug}/appointments$`));
+  await expect(page).toHaveURL((url) => url.pathname === `/${orgSlug}/appointments`);
 
   const created = await adminDb.appointment.findFirstOrThrow({
     where: { organizationId: orgId, patientId, professionalId },
