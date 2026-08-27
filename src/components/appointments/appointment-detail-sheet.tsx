@@ -103,6 +103,7 @@ export function AppointmentDetailSheet({
 
         <div className="flex flex-col gap-4 px-4">
           <div
+            data-testid="appointment-status-chip"
             className={`flex min-h-[44px] w-fit items-center gap-2 rounded-md px-3 text-sm ${meta.chipClassName}`}
           >
             <StatusIcon className="size-4" aria-hidden="true" />
