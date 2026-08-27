@@ -22,16 +22,25 @@ enum Sex {
   FEMALE
 }
 
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
   createdAt DateTime @default(now())
 
-  memberships Membership[]
-  invites     Invite[]
-  patients    Patient[]
-  auditLogs   AuditLog[]
+  memberships  Membership[]
+  invites      Invite[]
+  patients     Patient[]
+  auditLogs    AuditLog[]
+  appointments Appointment[]
 
   @@map("organizations")
 }
@@ -73,7 +82,8 @@ model Professional {
   specialty      String?
   signatureUrl   String?
 
-  membership Membership @relation(fields: [membershipId], references: [id])
+  membership   Membership    @relation(fields: [membershipId], references: [id])
+  appointments Appointment[]
 
   @@index([organizationId])
   @@map("professionals")
@@ -110,7 +120,8 @@ model Patient {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  appointments Appointment[]
 
   @@unique([organizationId, documentId])
   @@index([organizationId])
@@ -122,6 +133,28 @@ model Patient {
   // this `@@index` tells Prisma's diff engine the index is expected.
   @@index([fullName(ops: raw("gin_trgm_ops"))], type: Gin, map: "patients_full_name_trgm_idx")
   @@map("patients")
+}
+
+model Appointment {
+  id             String            @id @default(cuid())
+  organizationId String
+  patientId      String
+  professionalId String
+  startAt        DateTime
+  endAt          DateTime
+  status         AppointmentStatus @default(SCHEDULED)
+  reason         String?
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  patient      Patient      @relation(fields: [patientId], references: [id])
+  professional Professional @relation(fields: [professionalId], references: [id])
+
+  @@index([organizationId])
+  @@index([professionalId, startAt])
+  @@map("appointments")
 }
 
 model AuditLog {
