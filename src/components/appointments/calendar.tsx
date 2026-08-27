@@ -44,13 +44,25 @@ export interface CalendarProps {
   initialRangeEnd: string;
 }
 
+// ADR-0005: @fullcalendar/core only natively supports timeZone "local" or
+// "UTC" -- a named zone like "America/Bogota" silently falls back to the
+// browser/server's local zone without the separate moment-timezone plugin,
+// which this fixed, DST-free, single-offset case (REQ-005) doesn't
+// justify pulling in. Every instant crossing into or out of FullCalendar
+// is shifted by this fixed offset and declared `timeZone="UTC"` below, so
+// FullCalendar's grid, navigation, and drag positions all read as true
+// Bogota wall-clock time while every other file keeps working in real UTC.
+const BOGOTA_OFFSET_MS = 5 * 60 * 60_000;
+const toDisplayInstant = (real: Date) => new Date(real.getTime() - BOGOTA_OFFSET_MS);
+const toRealInstant = (display: Date) => new Date(display.getTime() + BOGOTA_OFFSET_MS);
+
 function toEventInput(appointment: AppointmentForCalendar) {
   const meta = statusMeta(appointment.status);
   return {
     id: appointment.id,
     resourceId: appointment.professionalId,
-    start: appointment.startAt,
-    end: appointment.endAt,
+    start: toDisplayInstant(new Date(appointment.startAt)).toISOString(),
+    end: toDisplayInstant(new Date(appointment.endAt)).toISOString(),
     title: appointment.patientName,
     extendedProps: { status: appointment.status, appointment },
     classNames: [meta.strikethrough ? "line-through" : ""].filter(Boolean),
@@ -94,10 +106,15 @@ export function Calendar({
 
   const handleDatesSet = useCallback(
     async (arg: DatesSetArg) => {
-      if (arg.startStr === currentRange.current.start && arg.endStr === currentRange.current.end) {
+      // arg.start/arg.end are display instants (ADR-0005); convert back to
+      // real UTC before comparing against/storing in currentRange, which
+      // is always real UTC (what getAppointmentsForRangeAction expects).
+      const start = toRealInstant(arg.start).toISOString();
+      const end = toRealInstant(arg.end).toISOString();
+      if (start === currentRange.current.start && end === currentRange.current.end) {
         return;
       }
-      currentRange.current = { start: arg.startStr, end: arg.endStr };
+      currentRange.current = { start, end };
       setLoading(true);
       try {
         await refetchCurrentRange();
@@ -112,9 +129,13 @@ export function Calendar({
     async (arg: EventDropArg) => {
       const appointment = arg.event.extendedProps.appointment as AppointmentForCalendar;
       const newProfessionalId = (arg.event.getResources()[0]?.id ?? appointment.professionalId) as string;
-      const start = arg.event.start!;
-      const durationMinutes = Math.round((arg.event.end!.getTime() - start.getTime()) / 60_000);
-      const { date, time } = formatBogotaDateAndTime(start);
+      // arg.event.start/end are display instants (ADR-0005); convert back
+      // to the real UTC instant before deriving the Bogota date/time
+      // fields updateAppointmentAction expects.
+      const realStart = toRealInstant(arg.event.start!);
+      const realEnd = toRealInstant(arg.event.end!);
+      const durationMinutes = Math.round((realEnd.getTime() - realStart.getTime()) / 60_000);
+      const { date, time } = formatBogotaDateAndTime(realStart);
 
       setDragError(null);
       const result = await updateAppointmentAction(appointment.id, {
@@ -165,7 +186,9 @@ export function Calendar({
 
   const handleSelect = useCallback(
     (arg: DateSelectArg) => {
-      const { date, time } = formatBogotaDateAndTime(arg.start);
+      // arg.start is a display instant (ADR-0005); convert back to real
+      // UTC before deriving the Bogota date/time to pre-fill.
+      const { date, time } = formatBogotaDateAndTime(toRealInstant(arg.start));
       const professionalId = arg.resource?.id ?? "";
       const params = new URLSearchParams({ date, time, professionalId });
       router.push(`/${orgSlug}/appointments/new?${params.toString()}`);
@@ -196,7 +219,7 @@ export function Calendar({
   return (
     <div className="flex flex-col gap-2">
       {dragError && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" data-testid="drag-error" className="text-sm text-destructive">
           {dragError}
         </p>
       )}
@@ -223,14 +246,20 @@ export function Calendar({
         <FullCalendar
           plugins={[resourceTimeGridPlugin, listPlugin, interactionPlugin]}
           initialView="resourceTimeGridDay"
-          // REQ-005: stored instants are UTC, but every day/range boundary
-          // this view computes (today, prev/next, datesSet's start/end)
-          // must line up with America/Bogota wall-clock days, not the
-          // browser's local timezone (FullCalendar's default) or the
-          // deployment server's timezone -- otherwise the "today" this
-          // renders can disagree with the shell's own
-          // `getBogotaDayRange()` server-side.
-          timeZone="America/Bogota"
+          // ADR-0005: "UTC" (a built-in-supported value), fed
+          // display-shifted instants (toDisplayInstant/toRealInstant
+          // above) rather than the named "America/Bogota" zone, which
+          // @fullcalendar/core silently doesn't support without the
+          // separate moment-timezone plugin.
+          timeZone="UTC"
+          // ADR-0005: FullCalendar's own notion of "now" (initial view,
+          // the "today" nav button) must be shifted exactly like event
+          // data is, or its default "today" (real UTC calendar day) can
+          // disagree with the Bogota calendar day the shifted events
+          // actually fall on -- most visibly whenever a Bogota day hasn't
+          // yet rolled over in UTC terms.
+          now={() => toDisplayInstant(new Date())}
+          initialDate={toDisplayInstant(new Date(initialRangeStart))}
           headerToolbar={{
             left: "prev,next today",
             center: "title",
