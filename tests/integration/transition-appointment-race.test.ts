@@ -25,14 +25,26 @@ let user: { id: string };
 let professional: { id: string };
 let patient: { id: string };
 
+// beforeEach below runs once per test case, each time creating a fresh
+// org/user/professional/patient. Every id is tracked here so afterAll can
+// clean up every test case's fixtures, not just whichever one happened to
+// run last -- same array-accumulation pattern as
+// tests/integration/update-appointment.test.ts. This file currently has
+// only one `it` block, so the bug hasn't visibly leaked yet, but it would
+// the moment a second test case is added without this fix.
+const orgIds: string[] = [];
+const userIds: string[] = [];
+
 beforeEach(async () => {
   vi.clearAllMocks();
   org = await adminDb.organization.create({
     data: { name: `Transition Race Org ${runId}`, slug: `transition-race-org-${runId}-${Math.random()}` },
   });
+  orgIds.push(org.id);
   user = await adminDb.user.create({
     data: { email: `transition-race-${runId}-${Math.random()}@example.test`, passwordHash: "x", name: "Actor" },
   });
+  userIds.push(user.id);
   const membership = await adminDb.membership.create({
     data: { userId: user.id, organizationId: org.id, role: "FRONT_DESK" },
   });
@@ -47,11 +59,12 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  await adminDb.appointment.deleteMany({ where: { organizationId: org?.id } });
-  await adminDb.patient.deleteMany({ where: { organizationId: org?.id } });
-  await adminDb.professional.deleteMany({ where: { organizationId: org?.id } });
-  await adminDb.membership.deleteMany({ where: { organizationId: org?.id } });
-  await adminDb.organization.deleteMany({ where: { id: org?.id } });
+  await adminDb.appointment.deleteMany({ where: { organizationId: { in: orgIds } } });
+  await adminDb.patient.deleteMany({ where: { organizationId: { in: orgIds } } });
+  await adminDb.professional.deleteMany({ where: { organizationId: { in: orgIds } } });
+  await adminDb.membership.deleteMany({ where: { organizationId: { in: orgIds } } });
+  await adminDb.user.deleteMany({ where: { id: { in: userIds } } });
+  await adminDb.organization.deleteMany({ where: { id: { in: orgIds } } });
   await adminDb.$disconnect();
 });
 

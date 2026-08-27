@@ -21,17 +21,33 @@ let professionalA: { id: string };
 let professionalB: { id: string };
 let patient: { id: string };
 
+// beforeEach below runs once per test case, each time creating a fresh
+// org/otherOrg/user/userB. Every id is tracked here so afterAll can clean
+// up every test case's fixtures, not just whichever one happened to run
+// last -- same array-accumulation pattern as
+// tests/integration/update-appointment.test.ts. Without this, only the
+// last test's org/otherOrg/etc. were ever deleted and every earlier test
+// case's rows leaked permanently. The inline `otherUser` created in the
+// "never returns another organization's appointments" test is pushed into
+// userIds too, since (unlike update-appointment.test.ts's self-cleaning
+// otherOrgUser) it isn't deleted inline within that test.
+const orgIds: string[] = [];
+const userIds: string[] = [];
+
 beforeEach(async () => {
   vi.clearAllMocks();
   org = await adminDb.organization.create({
     data: { name: `Range Query Org ${runId}`, slug: `range-query-org-${runId}-${Math.random()}` },
   });
+  orgIds.push(org.id);
   otherOrg = await adminDb.organization.create({
     data: { name: `Range Query Org B ${runId}`, slug: `range-query-org-b-${runId}-${Math.random()}` },
   });
+  orgIds.push(otherOrg.id);
   user = await adminDb.user.create({
     data: { email: `range-query-${runId}-${Math.random()}@example.test`, passwordHash: "x", name: "Actor" },
   });
+  userIds.push(user.id);
   const membershipA = await adminDb.membership.create({
     data: { userId: user.id, organizationId: org.id, role: "FRONT_DESK" },
   });
@@ -41,6 +57,7 @@ beforeEach(async () => {
   const userB = await adminDb.user.create({
     data: { email: `range-query-b-${runId}-${Math.random()}@example.test`, passwordHash: "x", name: "Actor B" },
   });
+  userIds.push(userB.id);
   const membershipB = await adminDb.membership.create({
     data: { userId: userB.id, organizationId: org.id, role: "NUTRITIONIST" },
   });
@@ -55,11 +72,12 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  await adminDb.appointment.deleteMany({ where: { organizationId: { in: [org?.id, otherOrg?.id] } } });
-  await adminDb.patient.deleteMany({ where: { organizationId: { in: [org?.id, otherOrg?.id] } } });
-  await adminDb.professional.deleteMany({ where: { organizationId: { in: [org?.id, otherOrg?.id] } } });
-  await adminDb.membership.deleteMany({ where: { organizationId: { in: [org?.id, otherOrg?.id] } } });
-  await adminDb.organization.deleteMany({ where: { id: { in: [org?.id, otherOrg?.id] } } });
+  await adminDb.appointment.deleteMany({ where: { organizationId: { in: orgIds } } });
+  await adminDb.patient.deleteMany({ where: { organizationId: { in: orgIds } } });
+  await adminDb.professional.deleteMany({ where: { organizationId: { in: orgIds } } });
+  await adminDb.membership.deleteMany({ where: { organizationId: { in: orgIds } } });
+  await adminDb.user.deleteMany({ where: { id: { in: userIds } } });
+  await adminDb.organization.deleteMany({ where: { id: { in: orgIds } } });
   await adminDb.$disconnect();
 });
 
@@ -107,8 +125,9 @@ describe("getAppointmentsForRangeAction (REQ-019)", () => {
 
   it("never returns another organization's appointments", async () => {
     const otherUser = await adminDb.user.create({
-      data: { email: `range-query-other-${runId}@example.test`, passwordHash: "x", name: "Other" },
+      data: { email: `range-query-other-${runId}-${Math.random()}@example.test`, passwordHash: "x", name: "Other" },
     });
+    userIds.push(otherUser.id);
     const otherMembership = await adminDb.membership.create({
       data: { userId: otherUser.id, organizationId: otherOrg.id, role: "ADMIN" },
     });
