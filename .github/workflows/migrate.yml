@@ -1,0 +1,89 @@
+name: migrate
+
+on:
+  push:
+    branches: [main]
+    paths: ["prisma/migrations/**"]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize]
+    paths: ["prisma/migrations/**"]
+  workflow_dispatch:
+    inputs:
+      pr_branch:
+        description: "Repository branch with an existing Neon preview (leave empty for production)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  migrate-production:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.pr_branch == '')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.repository.default_branch || github.sha }}
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm exec prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.PROD_MIGRATION_DATABASE_URL }}
+
+  migrate-preview:
+    if: >-
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' && inputs.pr_branch != '')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.event.repository.default_branch }}
+      - name: Resolve preview branch connection string
+        id: neon
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          NEON_MIGRATION_ROLE_NAME: ${{ vars.NEON_MIGRATION_ROLE_NAME }}
+          NEON_DATABASE_NAME: ${{ vars.NEON_DATABASE_NAME }}
+          BRANCH_NAME: preview/${{ github.event_name == 'workflow_dispatch' && inputs.pr_branch || github.head_ref }}
+        run: |
+          set -euo pipefail
+
+          branch_id=""
+          for _ in $(seq 1 20); do
+            branch_id="$(curl -fsS \
+              -H "Authorization: Bearer $NEON_API_KEY" \
+              "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" \
+              | jq -r --arg branch_name "$BRANCH_NAME" \
+                'first(.branches[] | select(.name == $branch_name) | .id) // empty')"
+
+            if [ -n "$branch_id" ]; then
+              break
+            fi
+
+            sleep 15
+          done
+
+          if [ -z "$branch_id" ]; then
+            echo "::error::Neon preview branch did not appear within 5 minutes"
+            exit 1
+          fi
+
+          uri="$(curl -fsS --get \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            --data-urlencode "branch_id=$branch_id" \
+            --data-urlencode "database_name=$NEON_DATABASE_NAME" \
+            --data-urlencode "role_name=$NEON_MIGRATION_ROLE_NAME" \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri" \
+            | jq -er '.uri')"
+          echo "::add-mask::$uri"
+          echo "database_url=$uri" >> "$GITHUB_OUTPUT"
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm exec prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.database_url }}
