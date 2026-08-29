@@ -7,7 +7,10 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize]
-    paths: ["prisma/migrations/**"]
+    paths:
+      - "prisma/migrations/**"
+      - "prisma/seed-preview.mjs"
+      - ".github/workflows/migrate.yml"
   workflow_dispatch:
     inputs:
       pr_branch:

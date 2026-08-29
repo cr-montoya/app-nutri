@@ -81,6 +81,12 @@ All 5 `AppointmentStatus` values present; both professionals have at least one p
 
 ## Workflow changes (`.github/workflows/migrate.yml`)
 
+The `pull_request.paths` filter includes `prisma/migrations/**`,
+`prisma/seed-preview.mjs`, and `.github/workflows/migrate.yml`, so a PR that
+changes the seed or its wiring can execute the live proof even when it adds no
+migration. The `push.paths` filter remains migration-only: merging seed-only or
+workflow-only changes must not trigger the production migration job.
+
 ```yaml
 jobs:
   migrate-preview:
