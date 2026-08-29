@@ -23,4 +23,6 @@ Branch: `chore/preview-seed-data`, created by `task-runner` from up-to-date `mai
 
 ## After T3.1
 
+- [x] T4.1 Resolve QA/code-quality gate findings by centralizing the preview-seed integration fixture, allowing the serialized real-database tests enough time under concurrent gate load, and clearing the three ESLint security warnings without disabling rules globally. Validation: `pnpm test`, `pnpm lint`, and `pnpm exec tsc --noEmit` all pass.
+
 Run `qa` and `code-quality`, then `security` (this spec creates password hashes and a deliberately hardcoded credential — REQ-006's risk-acceptance reasoning needs an independent check, not just this document's say-so), then `reviewer` as the final gate, then `spec-closeout`, then `pr-prep`.

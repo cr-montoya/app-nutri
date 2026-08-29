@@ -27,9 +27,11 @@ const SEED_USERS = [
 const SEED_PATIENTS = Array.from({ length: 10 }, (_, index) => {
   const number = index + 1;
   const numberNames = ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
+  const numberName = numberNames.at(index);
+  if (!numberName) throw new Error("Preview patient number name is missing.");
 
   return {
-    fullName: `Test Patient ${numberNames[index]}`,
+    fullName: `Test Patient ${numberName}`,
     phone: `+155500000${String(number).padStart(2, "0")}`,
     documentId: `PREVIEW-${String(number).padStart(3, "0")}`,
     birthDate: new Date(Date.UTC(1975 + index * 3, index % 12, number)),

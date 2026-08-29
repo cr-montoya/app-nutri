@@ -9,9 +9,11 @@ export async function acquirePreviewSeedTestLock(): Promise<() => Promise<void>>
 
   while (true) {
     try {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- lockPath is a fixed module constant
       const handle = await open(lockPath, "wx");
       return async () => {
         await handle.close();
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- lockPath is a fixed module constant
         await unlink(lockPath).catch(() => undefined);
       };
     } catch (error) {

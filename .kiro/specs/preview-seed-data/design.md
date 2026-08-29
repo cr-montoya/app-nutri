@@ -143,3 +143,7 @@ prisma/seed-preview.mjs                # new: the seed script
   interactive browser session. The browser logged in independently as all four
   seeded users and exercised the same patient/calendar routes and assertions;
   no bypass credential or test runner was committed.
+- The five integration suites share `tests/helpers/preview-seed.ts` and a
+  filesystem lock helper. The approved design listed only production files;
+  these test-only helpers were added after QA exposed duplicate setup/cleanup
+  and default timeout flakiness while the real-database suites ran in parallel.

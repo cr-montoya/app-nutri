@@ -1,14 +1,13 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { verify } from "@node-rs/argon2";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { adminDb } from "../helpers/admin-db";
-import { acquirePreviewSeedTestLock } from "../helpers/preview-seed-lock";
+import {
+  previewSeedOrganizationSlug,
+  runPreviewSeed,
+  usePreviewSeedTestLifecycle,
+} from "../helpers/preview-seed";
 
-const execFileAsync = promisify(execFile);
-const organizationSlug = "preview-clinic";
 const password = "Preview1234!";
-let releaseLock: () => Promise<void>;
 const expectedUsers = [
   ["admin@preview.example.com", "ADMIN"],
   ["frontdesk@preview.example.com", "FRONT_DESK"],
@@ -16,50 +15,14 @@ const expectedUsers = [
   ["nutri2@preview.example.com", "NUTRITIONIST"],
 ] as const;
 
-async function runSeed() {
-  await execFileAsync(process.execPath, ["prisma/seed-preview.mjs"], {
-    cwd: process.cwd(),
-    env: { ...process.env, SEED_PREVIEW_CONFIRM: "1" },
-  });
-}
-
-async function cleanSeed() {
-  const organization = await adminDb.organization.findUnique({
-    where: { slug: organizationSlug },
-    include: { memberships: { select: { userId: true } } },
-  });
-  if (!organization) return;
-
-  const userIds = organization.memberships.map(({ userId }) => userId);
-  await adminDb.$transaction([
-    adminDb.appointment.deleteMany({ where: { organizationId: organization.id } }),
-    adminDb.patient.deleteMany({ where: { organizationId: organization.id } }),
-    adminDb.professional.deleteMany({ where: { organizationId: organization.id } }),
-    adminDb.membership.deleteMany({ where: { organizationId: organization.id } }),
-    adminDb.user.deleteMany({ where: { id: { in: userIds } } }),
-    adminDb.organization.delete({ where: { id: organization.id } }),
-  ]);
-}
-
 describe("seed-preview-users", () => {
-  beforeAll(async () => {
-    releaseLock = await acquirePreviewSeedTestLock();
-  });
-
-  afterAll(async () => {
-    try {
-      await cleanSeed();
-      await adminDb.$disconnect();
-    } finally {
-      await releaseLock();
-    }
-  });
+  usePreviewSeedTestLifecycle();
 
   it("creates the documented users, memberships, and professional profiles", async () => {
-    await runSeed();
+    await runPreviewSeed();
 
     const organization = await adminDb.organization.findUniqueOrThrow({
-      where: { slug: organizationSlug },
+      where: { slug: previewSeedOrganizationSlug },
     });
     const users = await adminDb.user.findMany({
       where: { email: { in: expectedUsers.map(([email]) => email) } },
@@ -80,5 +43,5 @@ describe("seed-preview-users", () => {
         .map((user) => user.membership?.professional?.specialty)
         .sort(),
     ).toEqual(["Clinical Nutrition", "Sports Nutrition"]);
-  });
+  }, 30_000);
 });
