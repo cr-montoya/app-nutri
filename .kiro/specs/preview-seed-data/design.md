@@ -138,4 +138,8 @@ prisma/seed-preview.mjs                # new: the seed script
 
 ## Deviations
 
-None yet; filled in by `spec-closeout` if implementation diverges.
+- T3.1's protected Vercel preview was verified with a one-off headless Chromium
+  session using Vercel CLI's authenticated protection bypass rather than an
+  interactive browser session. The browser logged in independently as all four
+  seeded users and exercised the same patient/calendar routes and assertions;
+  no bypass credential or test runner was committed.
