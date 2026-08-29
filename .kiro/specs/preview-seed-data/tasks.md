@@ -13,7 +13,7 @@ Branch: `chore/preview-seed-data`, created by `task-runner` from up-to-date `mai
 
 ## T2: Wire into the CI pipeline
 
-- [ ] T2.1 Add the `Seed preview data` step (after the existing `prisma migrate deploy` step) and the `concurrency:` block to `.github/workflows/migrate.yml`'s `migrate-preview` job only, exactly as in `design.md`. Validation: `grep -c "seed-preview" .github/workflows/migrate.yml` returns `1` (the reference appears only inside `migrate-preview`, never inside `migrate-production` — confirmed by also asserting `sed -n '/migrate-production:/,/migrate-preview:/p' .github/workflows/migrate.yml | grep -c seed-preview` returns `0`), plus a workflow syntax check (`actionlint .github/workflows/migrate.yml` if available, otherwise `gh workflow view migrate.yml` after pushing shows no parse error).
+- [x] T2.1 Add the `Seed preview data` step (after the existing `prisma migrate deploy` step) and the `concurrency:` block to `.github/workflows/migrate.yml`'s `migrate-preview` job only, exactly as in `design.md`. Validation: `grep -c "seed-preview" .github/workflows/migrate.yml` returns `1` (the reference appears only inside `migrate-preview`, never inside `migrate-production` — confirmed by also asserting `sed -n '/migrate-production:/,/migrate-preview:/p' .github/workflows/migrate.yml | grep -c seed-preview` returns `0`), plus a workflow syntax check (`actionlint .github/workflows/migrate.yml` if available, otherwise `gh workflow view migrate.yml` after pushing shows no parse error).
 
 ## T3: End-to-end proof
 
