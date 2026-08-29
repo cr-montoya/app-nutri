@@ -22,16 +22,25 @@ enum Sex {
   FEMALE
 }
 
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
   createdAt DateTime @default(now())
 
-  memberships Membership[]
-  invites     Invite[]
-  patients    Patient[]
-  auditLogs   AuditLog[]
+  memberships  Membership[]
+  invites      Invite[]
+  patients     Patient[]
+  auditLogs    AuditLog[]
+  appointments Appointment[]
 
   @@map("organizations")
 }
@@ -73,7 +82,8 @@ model Professional {
   specialty      String?
   signatureUrl   String?
 
-  membership Membership @relation(fields: [membershipId], references: [id])
+  membership   Membership    @relation(fields: [membershipId], references: [id])
+  appointments Appointment[]
 
   @@index([organizationId])
   @@map("professionals")
@@ -110,7 +120,8 @@ model Patient {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  appointments Appointment[]
 
   @@unique([organizationId, documentId])
   @@index([organizationId])
@@ -122,6 +133,48 @@ model Patient {
   // this `@@index` tells Prisma's diff engine the index is expected.
   @@index([fullName(ops: raw("gin_trgm_ops"))], type: Gin, map: "patients_full_name_trgm_idx")
   @@map("patients")
+}
+
+model Appointment {
+  id             String            @id @default(cuid())
+  organizationId String
+  patientId      String
+  professionalId String
+  // ADR-0005: stored digits are UTC clock digits, not Bogota clock digits --
+  // America/Bogota (UTC-5) is applied only at the input/output boundary
+  // (src/validation/appointments.ts's resolveAppointmentRange/
+  // formatBogotaDateAndTime). Any future raw SQL touching these columns
+  // must apply the same offset, not assume the stored value is already
+  // Bogota-local.
+  startAt        DateTime
+  endAt          DateTime
+  status         AppointmentStatus @default(SCHEDULED)
+  reason         String?
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  patient      Patient      @relation(fields: [patientId], references: [id])
+  professional Professional @relation(fields: [professionalId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, patientId])
+  @@index([professionalId, startAt])
+  // Serves getAppointmentsForRangeAction's range-overlap query
+  // (organizationId + startAt/endAt comparisons). A prior GiST expression
+  // index (organizationId + tsrange(startAt, endAt)) was tried here and
+  // removed in prisma/migrations/20260827142542_replace_appointment_gist_with_btree_index:
+  // Postgres can only use an expression index when the query literally
+  // contains that expression, and Prisma's `findMany` emits separate
+  // `startAt < ? AND endAt > ?` comparisons, not a `tsrange(...) &&
+  // tsrange(...)` clause -- so the GiST index was never actually chosen by
+  // the planner (confirmed empirically at 280k synthetic rows: seq scan,
+  // 29ms, 5863 buffers). This plain composite btree matches the query's
+  // real shape and is picked up immediately with no application-code
+  // change (confirmed: bitmap heap scan, 0.5ms, at both 50k and 280k rows).
+  @@index([organizationId, startAt])
+  @@map("appointments")
 }
 
 model AuditLog {

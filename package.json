@@ -17,6 +17,13 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
+    "@fullcalendar/core": "^6.1.21",
+    "@fullcalendar/interaction": "^6.1.21",
+    "@fullcalendar/list": "^6.1.21",
+    "@fullcalendar/react": "^6.1.21",
+    "@fullcalendar/resource": "^6.1.21",
+    "@fullcalendar/resource-timegrid": "^6.1.21",
+    "@fullcalendar/timegrid": "^6.1.21",
     "@hookform/resolvers": "^5.9.1",
     "@node-rs/argon2": "^2.1.0",
     "@prisma/client": "6.19.3",

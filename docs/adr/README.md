@@ -18,6 +18,8 @@ Use the `adr` skill (`.agents/skills/adr/SKILL.md`). It numbers the record seque
 | [0002](0002-token-scoped-rls-lookup.md) | Token-scoped RLS branch for pre-authentication lookups | Accepted |
 | [0003](0003-neon-runtime-connection-contract.md) | Neon runtime connection contract for Vercel | Accepted |
 | [0004](0004-split-migration-credentials.md) | Split credentials for CI-driven Neon migrations | Accepted |
+| [0005](0005-fixed-offset-calendar-timezone-rendering.md) | Fixed-offset (non-plugin) America/Bogota rendering for FullCalendar | Accepted |
+| [0006](0006-appointment-range-query-index-cold-plan-tradeoff.md) | Composite btree index for appointment range queries despite an unresolved cold-plan gap | Accepted |
 <!-- adr skill appends rows here, oldest first -->
 
 ## Format

@@ -31,6 +31,7 @@ const TENANT_SCOPED_MODELS = new Set([
   "Invite",
   "Patient",
   "AuditLog",
+  "Appointment",
 ]);
 
 const tenantStorage = new AsyncLocalStorage<TenantContext>();
