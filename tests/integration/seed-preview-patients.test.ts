@@ -1,18 +1,10 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { verify } from "@node-rs/argon2";
 import { afterAll, describe, expect, it } from "vitest";
 import { adminDb } from "../helpers/admin-db";
 
 const execFileAsync = promisify(execFile);
 const organizationSlug = "preview-clinic";
-const password = "Preview1234!";
-const expectedUsers = [
-  ["admin@preview.example.com", "ADMIN"],
-  ["frontdesk@preview.example.com", "FRONT_DESK"],
-  ["nutri1@preview.example.com", "NUTRITIONIST"],
-  ["nutri2@preview.example.com", "NUTRITIONIST"],
-] as const;
 
 async function runSeed() {
   await execFileAsync(process.execPath, ["prisma/seed-preview.mjs"], {
@@ -38,36 +30,27 @@ async function cleanSeed() {
   ]);
 }
 
-describe("seed-preview-users", () => {
+describe("seed-preview-patients", () => {
   afterAll(async () => {
     await cleanSeed();
     await adminDb.$disconnect();
   });
 
-  it("creates the documented users, memberships, and professional profiles", async () => {
+  it("creates ten clearly synthetic patients with one archived record", async () => {
     await runSeed();
 
     const organization = await adminDb.organization.findUniqueOrThrow({
       where: { slug: organizationSlug },
     });
-    const users = await adminDb.user.findMany({
-      where: { email: { in: expectedUsers.map(([email]) => email) } },
-      include: { membership: { include: { professional: true } } },
+    const patients = await adminDb.patient.findMany({
+      where: { organizationId: organization.id },
+      orderBy: { fullName: "asc" },
     });
 
-    expect(users).toHaveLength(4);
-    for (const [email, role] of expectedUsers) {
-      const user = users.find((candidate) => candidate.email === email);
-      expect(user?.membership).toMatchObject({ organizationId: organization.id, role });
-      expect(await verify(user?.passwordHash ?? "", password)).toBe(true);
-    }
-
-    expect(users.filter((user) => user.membership?.professional)).toHaveLength(2);
-    expect(
-      users
-        .filter((user) => user.membership?.professional)
-        .map((user) => user.membership?.professional?.specialty)
-        .sort(),
-    ).toEqual(["Clinical Nutrition", "Sports Nutrition"]);
+    expect(patients).toHaveLength(10);
+    expect(patients.filter(({ archivedAt }) => archivedAt !== null)).toHaveLength(1);
+    expect(patients.every(({ fullName }) => fullName.startsWith("Test Patient"))).toBe(true);
+    expect(patients.every(({ phone }) => phone.startsWith("+1555"))).toBe(true);
+    expect(patients.every(({ email }) => email?.endsWith("@example.com"))).toBe(true);
   });
 });

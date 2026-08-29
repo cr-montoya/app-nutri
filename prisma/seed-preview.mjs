@@ -24,6 +24,21 @@ const SEED_USERS = [
     specialty: "Sports Nutrition",
   },
 ];
+const SEED_PATIENTS = Array.from({ length: 10 }, (_, index) => {
+  const number = index + 1;
+  const numberNames = ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
+
+  return {
+    fullName: `Test Patient ${numberNames[index]}`,
+    phone: `+155500000${String(number).padStart(2, "0")}`,
+    documentId: `PREVIEW-${String(number).padStart(3, "0")}`,
+    birthDate: new Date(Date.UTC(1975 + index * 3, index % 12, number)),
+    sex: index % 2 === 0 ? "FEMALE" : "MALE",
+    email: `test.patient.${number}@example.com`,
+    address: `${number} Fictional Avenue`,
+    archivedAt: number === 10 ? new Date() : null,
+  };
+});
 const prisma = new PrismaClient();
 
 async function deleteExistingSeed() {
@@ -61,7 +76,7 @@ async function deleteExistingSeed() {
 async function createSeedOrganizationAndUsers() {
   const passwordHash = await hash(SEED_PASSWORD);
 
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const organization = await tx.organization.create({
       data: { name: "Preview Clinic", slug: SEED_ORGANIZATION_SLUG },
     });
@@ -92,12 +107,21 @@ async function createSeedOrganizationAndUsers() {
         });
       }
     }
+
+    return organization.id;
+  });
+}
+
+async function createSeedPatients(organizationId) {
+  await prisma.patient.createMany({
+    data: SEED_PATIENTS.map((patient) => ({ ...patient, organizationId })),
   });
 }
 
 try {
   await deleteExistingSeed();
-  await createSeedOrganizationAndUsers();
+  const organizationId = await createSeedOrganizationAndUsers();
+  await createSeedPatients(organizationId);
 } finally {
   await prisma.$disconnect();
 }
