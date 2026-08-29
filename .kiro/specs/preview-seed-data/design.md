@@ -102,6 +102,7 @@ jobs:
         # ... unchanged ...
       - uses: pnpm/action-setup@<pinned-sha>
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
       - run: pnpm exec prisma migrate deploy
         env:
           DATABASE_URL: ${{ steps.neon.outputs.database_url }}
@@ -113,6 +114,12 @@ jobs:
 ```
 
 `migrate-production` gains no new step and no `concurrency:` block — a production migration should never be cancelled mid-flight by a newer push, which is exactly what `cancel-in-progress` would do if applied there.
+
+The explicit `prisma generate` is required because the workflow deliberately
+installs with `--ignore-scripts`; `prisma migrate deploy` does not require the
+generated client, while `seed-preview.mjs` imports `@prisma/client` and does.
+Keeping generation explicit preserves the install hardening and makes the seed
+runtime dependency visible in the job definition.
 
 ## Multi-tenant isolation and RBAC impact
 

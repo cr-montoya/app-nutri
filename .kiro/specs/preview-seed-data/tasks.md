@@ -15,6 +15,7 @@ Branch: `chore/preview-seed-data`, created by `task-runner` from up-to-date `mai
 
 - [x] T2.1 Add the `Seed preview data` step (after the existing `prisma migrate deploy` step) and the `concurrency:` block to `.github/workflows/migrate.yml`'s `migrate-preview` job only, exactly as in `design.md`. Validation: `grep -c "seed-preview" .github/workflows/migrate.yml` returns `1` (the reference appears only inside `migrate-preview`, never inside `migrate-production` — confirmed by also asserting `sed -n '/migrate-production:/,/migrate-preview:/p' .github/workflows/migrate.yml | grep -c seed-preview` returns `0`), plus a workflow syntax check (`actionlint .github/workflows/migrate.yml` if available, otherwise `gh workflow view migrate.yml` after pushing shows no parse error).
 - [x] T2.2 Extend only `pull_request.paths` to include `prisma/seed-preview.mjs` and `.github/workflows/migrate.yml`, retaining `prisma/migrations/**`; leave `push.paths` migration-only. Validation: a push to PR #6 triggers exactly one `migrate-preview` run, while `migrate-production` remains skipped. Closes the live-proof trigger gap discovered during T3.1.
+- [x] T2.3 Generate Prisma Client explicitly in `migrate-preview` after the hardened `pnpm install --ignore-scripts` and before the seed imports `@prisma/client`. Validation: PR #6's `migrate-preview` log shows `prisma generate` and the seed step passing. Closes the missing generated-client failure from run `33228293136`.
 
 ## T3: End-to-end proof
 
