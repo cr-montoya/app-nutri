@@ -1,10 +1,12 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { adminDb } from "../helpers/admin-db";
+import { acquirePreviewSeedTestLock } from "../helpers/preview-seed-lock";
 
 const execFileAsync = promisify(execFile);
 const organizationSlug = "preview-clinic";
+let releaseLock: () => Promise<void>;
 
 async function runSeed() {
   await execFileAsync(process.execPath, ["prisma/seed-preview.mjs"], {
@@ -32,9 +34,17 @@ async function cleanSeed() {
 }
 
 describe("seed-preview-appointments", () => {
+  beforeAll(async () => {
+    releaseLock = await acquirePreviewSeedTestLock();
+  });
+
   afterAll(async () => {
-    await cleanSeed();
-    await adminDb.$disconnect();
+    try {
+      await cleanSeed();
+      await adminDb.$disconnect();
+    } finally {
+      await releaseLock();
+    }
   });
 
   it("creates a valid schedule covering every status and both professionals", async () => {

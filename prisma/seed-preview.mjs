@@ -219,6 +219,11 @@ try {
   const organizationId = await createSeedOrganizationAndUsers();
   await createSeedPatients(organizationId);
   await createSeedAppointments(organizationId);
+
+  console.log(`Preview organization: ${SEED_ORGANIZATION_SLUG}`);
+  for (const { email, role } of SEED_USERS) {
+    console.log(`${email} — ${role}`);
+  }
 } finally {
   await prisma.$disconnect();
 }
