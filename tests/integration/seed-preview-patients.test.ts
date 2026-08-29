@@ -22,6 +22,7 @@ async function cleanSeed() {
 
   const userIds = organization.memberships.map(({ userId }) => userId);
   await adminDb.$transaction([
+    adminDb.appointment.deleteMany({ where: { organizationId: organization.id } }),
     adminDb.patient.deleteMany({ where: { organizationId: organization.id } }),
     adminDb.professional.deleteMany({ where: { organizationId: organization.id } }),
     adminDb.membership.deleteMany({ where: { organizationId: organization.id } }),

@@ -1,18 +1,10 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { verify } from "@node-rs/argon2";
 import { afterAll, describe, expect, it } from "vitest";
 import { adminDb } from "../helpers/admin-db";
 
 const execFileAsync = promisify(execFile);
 const organizationSlug = "preview-clinic";
-const password = "Preview1234!";
-const expectedUsers = [
-  ["admin@preview.example.com", "ADMIN"],
-  ["frontdesk@preview.example.com", "FRONT_DESK"],
-  ["nutri1@preview.example.com", "NUTRITIONIST"],
-  ["nutri2@preview.example.com", "NUTRITIONIST"],
-] as const;
 
 async function runSeed() {
   await execFileAsync(process.execPath, ["prisma/seed-preview.mjs"], {
@@ -39,36 +31,45 @@ async function cleanSeed() {
   ]);
 }
 
-describe("seed-preview-users", () => {
+describe("seed-preview-appointments", () => {
   afterAll(async () => {
     await cleanSeed();
     await adminDb.$disconnect();
   });
 
-  it("creates the documented users, memberships, and professional profiles", async () => {
+  it("creates a valid schedule covering every status and both professionals", async () => {
+    const beforeSeed = new Date();
     await runSeed();
 
     const organization = await adminDb.organization.findUniqueOrThrow({
       where: { slug: organizationSlug },
     });
-    const users = await adminDb.user.findMany({
-      where: { email: { in: expectedUsers.map(([email]) => email) } },
-      include: { membership: { include: { professional: true } } },
+    const appointments = await adminDb.appointment.findMany({
+      where: { organizationId: organization.id },
+      include: { patient: true },
     });
 
-    expect(users).toHaveLength(4);
-    for (const [email, role] of expectedUsers) {
-      const user = users.find((candidate) => candidate.email === email);
-      expect(user?.membership).toMatchObject({ organizationId: organization.id, role });
-      expect(await verify(user?.passwordHash ?? "", password)).toBe(true);
-    }
-
-    expect(users.filter((user) => user.membership?.professional)).toHaveLength(2);
+    expect(appointments).toHaveLength(7);
+    expect(new Set(appointments.map(({ status }) => status))).toEqual(
+      new Set(["SCHEDULED", "CONFIRMED", "COMPLETED", "CANCELLED", "NO_SHOW"]),
+    );
+    expect(new Set(appointments.map(({ professionalId }) => professionalId))).toHaveLength(2);
+    expect(appointments.every(({ patient }) => patient.documentId !== "PREVIEW-010")).toBe(true);
     expect(
-      users
-        .filter((user) => user.membership?.professional)
-        .map((user) => user.membership?.professional?.specialty)
-        .sort(),
-    ).toEqual(["Clinical Nutrition", "Sports Nutrition"]);
+      appointments
+        .filter(({ status }) => status === "SCHEDULED" || status === "CONFIRMED")
+        .every(({ startAt }) => startAt > beforeSeed),
+    ).toBe(true);
+    expect(
+      appointments
+        .filter(({ status }) => !["SCHEDULED", "CONFIRMED"].includes(status))
+        .every(({ startAt }) => startAt < beforeSeed),
+    ).toBe(true);
+    expect(
+      appointments.every(({ startAt, endAt }) => {
+        const minutes = (endAt.getTime() - startAt.getTime()) / 60_000;
+        return minutes >= 5 && minutes <= 480;
+      }),
+    ).toBe(true);
   });
 });
